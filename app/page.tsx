@@ -1,8 +1,5 @@
 "use client"
 
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
 import { useState, useEffect, useRef } from "react"
 import { RefreshCw, Clock, Globe, Zap, Activity } from "lucide-react"
 

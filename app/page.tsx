@@ -154,8 +154,6 @@ export default function InternetChecker() {
         // Set verbose status based on test phase
         if (elapsedTime < 1) {
           setStatusText("INITIALIZING SPEED TEST...")
-        } else if (progressPercent < 10) {
-          setStatusText(`ESTABLISHING CONNECTIONS...`)
         } else if (progressPercent < 90) {
           setStatusText(`DOWNLOADING ${mbDownloaded}MB AT ${currentSpeed.toFixed(1)} MBPS`)
         } else {
@@ -342,44 +340,78 @@ export default function InternetChecker() {
     
     // Draw speed line
     ctx.strokeStyle = '#00ff41'
-    ctx.lineWidth = 3
+    ctx.lineWidth = 4
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
     ctx.beginPath()
     
-    // Create smooth curve using quadratic curves
+    // Create ultra-smooth curve using Bezier curves
     if (data.length >= 2) {
-      // Start point
       const firstPoint = data[0]
       const firstX = margin.left + (firstPoint.time / maxTime) * graphWidth
       const firstY = margin.top + graphHeight - (firstPoint.speed / (maxSpeed * 1.1)) * graphHeight
       ctx.moveTo(firstX, firstY)
       
-      // Draw smooth curves between points
-      for (let i = 1; i < data.length; i++) {
-        const currentPoint = data[i]
-        const currentX = margin.left + (currentPoint.time / maxTime) * graphWidth
-        const currentY = margin.top + graphHeight - (currentPoint.speed / (maxSpeed * 1.1)) * graphHeight
-        
-        if (i === 1) {
-          // For the second point, draw a line to establish the curve
-          ctx.lineTo(currentX, currentY)
-        } else {
-          // For subsequent points, use quadratic curves for smoothness
-          const prevPoint = data[i - 1]
-          const prevX = margin.left + (prevPoint.time / maxTime) * graphWidth
-          const prevY = margin.top + graphHeight - (prevPoint.speed / (maxSpeed * 1.1)) * graphHeight
+      if (data.length === 2) {
+        // For just two points, draw a simple line
+        const secondPoint = data[1]
+        const secondX = margin.left + (secondPoint.time / maxTime) * graphWidth
+        const secondY = margin.top + graphHeight - (secondPoint.speed / (maxSpeed * 1.1)) * graphHeight
+        ctx.lineTo(secondX, secondY)
+      } else {
+        // For multiple points, use smooth Bezier curves
+        for (let i = 1; i < data.length; i++) {
+          const currentPoint = data[i]
+          const currentX = margin.left + (currentPoint.time / maxTime) * graphWidth
+          const currentY = margin.top + graphHeight - (currentPoint.speed / (maxSpeed * 1.1)) * graphHeight
           
-          // Control point is the midpoint between previous and current
-          const controlX = (prevX + currentX) / 2
-          const controlY = (prevY + currentY) / 2
-          
-          ctx.quadraticCurveTo(controlX, controlY, currentX, currentY)
+          if (i === 1) {
+            // First curve segment
+            const nextPoint = data[i + 1] || currentPoint
+            const nextX = margin.left + (nextPoint.time / maxTime) * graphWidth
+            const nextY = margin.top + graphHeight - (nextPoint.speed / (maxSpeed * 1.1)) * graphHeight
+            
+            const cp1x = firstX + (currentX - firstX) * 0.5
+            const cp1y = firstY
+            const cp2x = currentX - (nextX - currentX) * 0.3
+            const cp2y = currentY
+            
+            ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, currentX, currentY)
+          } else if (i === data.length - 1) {
+            // Last curve segment
+            const prevPoint = data[i - 1]
+            const prevX = margin.left + (prevPoint.time / maxTime) * graphWidth
+            const prevY = margin.top + graphHeight - (prevPoint.speed / (maxSpeed * 1.1)) * graphHeight
+            
+            const cp1x = prevX + (currentX - prevX) * 0.7
+            const cp1y = prevY
+            const cp2x = currentX - (currentX - prevX) * 0.5
+            const cp2y = currentY
+            
+            ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, currentX, currentY)
+          } else {
+            // Middle curve segments
+            const prevPoint = data[i - 1]
+            const nextPoint = data[i + 1]
+            const prevX = margin.left + (prevPoint.time / maxTime) * graphWidth
+            const prevY = margin.top + graphHeight - (prevPoint.speed / (maxSpeed * 1.1)) * graphHeight
+            const nextX = margin.left + (nextPoint.time / maxTime) * graphWidth
+            const nextY = margin.top + graphHeight - (nextPoint.speed / (maxSpeed * 1.1)) * graphHeight
+            
+            const cp1x = prevX + (currentX - prevX) * 0.7
+            const cp1y = prevY + (currentY - prevY) * 0.3
+            const cp2x = currentX - (nextX - currentX) * 0.3
+            const cp2y = currentY - (nextY - currentY) * 0.3
+            
+            ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, currentX, currentY)
+          }
         }
       }
     }
     
     // Add glow effect
     ctx.shadowColor = '#00ff41'
-    ctx.shadowBlur = 5
+    ctx.shadowBlur = 8
     ctx.stroke()
     ctx.shadowBlur = 0
     

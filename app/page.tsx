@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { RefreshCw, Clock, Globe, Zap, Activity } from "lucide-react"
 import * as d3 from "d3"
 

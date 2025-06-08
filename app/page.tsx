@@ -745,4 +745,106 @@ export default function InternetChecker() {
                 <div>
                   <div className="text-2xl mb-2">
                     <span className={getStatusColor()}>{statusText}</span>
-                    <span className={`cursor-blink ${getStatusColor()}`}
+                    <span className={`cursor-blink ${getStatusColor()}`}>
+                      {showCursor ? "_" : ""}
+                    </span>
+                  </div>
+                  <div className="text-sm opacity-70">
+                    IP: {currentIP} | Last checked: {lastChecked}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Control Buttons */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <button
+                onClick={checkConnection}
+                disabled={isChecking}
+                className={`terminal-button flex items-center justify-center gap-2 ${
+                  buttonAnimations.connection ? 'animate-pulse' : ''
+                }`}
+              >
+                <Globe className="w-4 h-4" />
+                {isChecking ? "CHECKING..." : "CHECK CONNECTION"}
+              </button>
+
+              <button
+                onClick={checkPing}
+                disabled={isPinging || !isOnline}
+                className={`terminal-button flex items-center justify-center gap-2 ${
+                  buttonAnimations.ping ? 'animate-pulse' : ''
+                }`}
+              >
+                <Activity className="w-4 h-4" />
+                {isPinging ? "PINGING..." : "PING TEST"}
+              </button>
+
+              <button
+                onClick={runSpeedTest}
+                disabled={isSpeedTesting || !isOnline}
+                className={`terminal-button flex items-center justify-center gap-2 ${
+                  buttonAnimations.speed ? 'animate-pulse' : ''
+                }`}
+              >
+                <Zap className="w-4 h-4" />
+                {isSpeedTesting ? "TESTING..." : "SPEED TEST"}
+              </button>
+            </div>
+
+            {/* Speed Test Graph */}
+            {isSpeedTesting && speedTestSamples.length > 0 && (
+              <div className="mb-8">
+                <div className="terminal-section">
+                  <h3 className="text-lg mb-4 text-[#00ff41]">REAL-TIME SPEED GRAPH</h3>
+                  <div 
+                    ref={speedGraphRef} 
+                    className="w-full h-64 bg-black border border-[#00ff41] rounded relative"
+                  >
+                    <canvas className="w-full h-full" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Connection Logs */}
+            <div className="terminal-section">
+              <h3 className="text-lg mb-4 text-[#00ff41] flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                CONNECTION LOG
+              </h3>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {connectionLogs.length === 0 ? (
+                  <div className="text-gray-400 text-center py-4">No connection logs yet</div>
+                ) : (
+                  connectionLogs.map((log, index) => (
+                    <div key={index} className="flex justify-between items-center text-sm border-b border-gray-700 pb-2">
+                      <div className="flex items-center gap-4">
+                        <span className="text-gray-400">{formatDateTime(log.timestamp)}</span>
+                        <span className="text-gray-300">{log.ip}</span>
+                      </div>
+                      <span className={getLogStatusColor(log)}>
+                        {getLogStatusDisplay(log)}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Settings */}
+            <div className="mt-8 flex justify-center">
+              <button
+                onClick={toggleAnimation}
+                className="terminal-button-small flex items-center gap-2"
+              >
+                <RefreshCw className="w-3 h-3" />
+                {animationEnabled ? "DISABLE" : "ENABLE"} MATRIX
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

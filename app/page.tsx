@@ -274,15 +274,31 @@ export default function InternetChecker() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const rect = canvas.getBoundingClientRect()
-    const width = rect.width
-    const height = rect.height
+    // Get the container dimensions and set canvas size properly
+    const container = speedGraphRef.current
+    const containerRect = container.getBoundingClientRect()
+    const dpr = window.devicePixelRatio || 1
+    
+    // Set canvas size to match container with device pixel ratio
+    const width = containerRect.width
+    const height = containerRect.height
+    
+    canvas.width = width * dpr
+    canvas.height = height * dpr
+    canvas.style.width = width + 'px'
+    canvas.style.height = height + 'px'
+    
+    // Scale the context to match device pixel ratio
+    ctx.scale(dpr, dpr)
     
     // Clear canvas
     ctx.clearRect(0, 0, width, height)
     
-    // Set up margins
-    const margin = { top: 20, right: 30, bottom: 40, left: 60 }
+    // Set up margins - smaller for mobile
+    const isMobile = width < 600
+    const margin = isMobile 
+      ? { top: 15, right: 20, bottom: 30, left: 40 }
+      : { top: 20, right: 30, bottom: 40, left: 60 }
     const graphWidth = width - margin.left - margin.right
     const graphHeight = height - margin.top - margin.bottom
     
@@ -328,19 +344,19 @@ export default function InternetChecker() {
     
     // Draw labels
     ctx.fillStyle = '#00ff41'
-    ctx.font = '12px "Courier New", Monaco, "Lucida Console", monospace'
+    ctx.font = `${isMobile ? '10px' : '12px'} "Courier New", Monaco, "Lucida Console", monospace`
     ctx.textAlign = 'center'
-    ctx.fillText('TIME (SECONDS)', margin.left + graphWidth / 2, height - 10)
+    ctx.fillText('TIME (SECONDS)', margin.left + graphWidth / 2, height - (isMobile ? 5 : 10))
     
     ctx.save()
-    ctx.translate(15, margin.top + graphHeight / 2)
+    ctx.translate(isMobile ? 10 : 15, margin.top + graphHeight / 2)
     ctx.rotate(-Math.PI / 2)
     ctx.fillText('SPEED (MBPS)', 0, 0)
     ctx.restore()
     
     // Draw speed line
     ctx.strokeStyle = '#00ff41'
-    ctx.lineWidth = 4
+    ctx.lineWidth = isMobile ? 3 : 4
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     ctx.beginPath()
@@ -417,14 +433,14 @@ export default function InternetChecker() {
     
     // Draw axis labels
     ctx.fillStyle = '#00cc00'
-    ctx.font = '10px "Courier New", Monaco, "Lucida Console", monospace'
+    ctx.font = `${isMobile ? '8px' : '10px'} "Courier New", Monaco, "Lucida Console", monospace`
     ctx.textAlign = 'center'
     
     // X-axis labels
     for (let i = 0; i <= 5; i++) {
       const x = margin.left + (i / 5) * graphWidth
       const time = (i / 5) * maxTime
-      ctx.fillText(`${time.toFixed(1)}s`, x, margin.top + graphHeight + 20)
+      ctx.fillText(`${time.toFixed(1)}s`, x, margin.top + graphHeight + (isMobile ? 15 : 20))
     }
     
     // Y-axis labels
@@ -432,7 +448,7 @@ export default function InternetChecker() {
     for (let i = 0; i <= 5; i++) {
       const y = margin.top + graphHeight - (i / 5) * graphHeight
       const speed = (i / 5) * maxSpeed * 1.1
-      ctx.fillText(`${speed.toFixed(0)}`, margin.left - 10, y + 4)
+      ctx.fillText(`${speed.toFixed(0)}`, margin.left - (isMobile ? 5 : 10), y + 4)
     }
   }, [])
 
@@ -721,13 +737,10 @@ export default function InternetChecker() {
                 </div>
                 <div 
                   ref={speedGraphRef}
-                  className="w-full h-52 bg-black border border-[#00cc00] p-2"
+                  className="w-full h-40 sm:h-52 bg-black border border-[#00cc00] p-1 sm:p-2"
                 >
                   <canvas 
-                    width={800} 
-                    height={200} 
                     className="w-full h-full"
-                    style={{ imageRendering: 'pixelated' }}
                   />
                 </div>
               </div>

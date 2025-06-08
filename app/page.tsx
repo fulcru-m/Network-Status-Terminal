@@ -779,4 +779,49 @@ function InternetCheckerContent() {
                         <th className="text-left">TIMESTAMP</th>
                       </tr>
                     </thead>
-                    
+                    <tbody>
+                      {connectionLogs.map((log, index) => (
+                        <tr key={index} className="border-t border-gray-600 border-opacity-30">
+                          <td className={`py-2 ${getLogStatusColor(log)}`}>
+                            {log.status.toUpperCase()}
+                          </td>
+                          <td className={`py-2 ${getLogStatusColor(log)}`}>
+                            {getLogStatusDisplay(log)}
+                          </td>
+                          <td className="py-2 opacity-70">
+                            {formatDateTime(log.timestamp)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Settings */}
+            <div className="mt-8 pt-6 border-t border-gray-600 border-opacity-30">
+              <div className="text-lg mb-4">Settings:</div>
+              <div className="flex flex-wrap gap-4">
+                <button onClick={toggleAnimation} className="terminal-button">
+                  {animationEnabled ? "DISABLE" : "ENABLE"} MATRIX EFFECT
+                </button>
+                <button onClick={toggleCloudflare} className="terminal-button">
+                  USE {useCloudflare ? "HTTPBIN" : "CLOUDFLARE"} PING
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function InternetChecker() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <InternetCheckerContent />
+    </Suspense>
+  )
+}

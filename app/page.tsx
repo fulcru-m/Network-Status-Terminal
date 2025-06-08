@@ -696,7 +696,7 @@ export default function InternetChecker() {
 
               <button onClick={checkPing} disabled={isPinging || !isOnline} className="terminal-button w-20 h-20" title="Ping Test">
                 {isPinging ? (
-                  <Zap className="w-12 h-12 animate-pulse" />
+                  <Zap className="w-12 h-12 animate-spin" />
                 ) : (
                   <Zap className="w-12 h-12" />
                 )}
@@ -704,7 +704,7 @@ export default function InternetChecker() {
 
               <button onClick={runSpeedTest} disabled={isSpeedTesting || !isOnline} className="terminal-button w-20 h-20" title="Speed Test">
                 {isSpeedTesting ? (
-                  <Activity className="w-12 h-12 animate-pulse" />
+                  <Activity className="w-12 h-12 animate-spin" />
                 ) : (
                   <Activity className="w-12 h-12" />
                 )}

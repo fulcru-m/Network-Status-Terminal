@@ -37,6 +37,11 @@ export default function InternetChecker() {
   const [totalBytesDownloaded, setTotalBytesDownloaded] = useState(0)
   const abortControllerRef = useRef<AbortController | null>(null)
   const animationFrameRef = useRef<number | null>(null)
+  const [buttonAnimations, setButtonAnimations] = useState({
+    connection: false,
+    ping: false,
+    speed: false
+  })
 
   // Speed test parameters
   const DOWNLOAD_FILE_SIZE_BYTES = 1000 * 1024 * 1024 // 1000 MB for faster testing
@@ -46,6 +51,14 @@ export default function InternetChecker() {
   const TEST_TIMEOUT_SECONDS = 10 // Increased timeout to 10 seconds
 
   const checkConnection = async () => {
+    // Start button animation
+    setButtonAnimations(prev => ({ ...prev, connection: true }))
+    
+    // Ensure minimum 3-second animation
+    const minAnimationTimeout = setTimeout(() => {
+      setButtonAnimations(prev => ({ ...prev, connection: false }))
+    }, 3000)
+
     setIsChecking(true)
     setCurrentStatusType("connection")
 
@@ -71,10 +84,30 @@ export default function InternetChecker() {
     }
 
     setIsChecking(false)
+    
+    // Clear the minimum animation timeout if the operation completed early
+    if (!isChecking) {
+      clearTimeout(minAnimationTimeout)
+      // But still ensure we show animation for at least 3 seconds from start
+      setTimeout(() => {
+        setButtonAnimations(prev => ({ ...prev, connection: false }))
+      }, Math.max(0, 3000 - (Date.now() - startTime)))
+    }
+    
     setLastChecked(new Date().toLocaleString())
   }
 
   const checkPing = async () => {
+    const startTime = Date.now()
+    
+    // Start button animation
+    setButtonAnimations(prev => ({ ...prev, ping: true }))
+    
+    // Ensure minimum 3-second animation
+    const minAnimationTimeout = setTimeout(() => {
+      setButtonAnimations(prev => ({ ...prev, ping: false }))
+    }, 3000)
+
     setIsPinging(true)
     setCurrentStatusType("ping")
     setPingTime(null)
@@ -105,11 +138,32 @@ export default function InternetChecker() {
     }
 
     setIsPinging(false)
+    
+    // Clear the minimum animation timeout if the operation completed early
+    clearTimeout(minAnimationTimeout)
+    // But still ensure we show animation for at least 3 seconds from start
+    setTimeout(() => {
+      setButtonAnimations(prev => ({ ...prev, ping: false }))
+    }, Math.max(0, 3000 - (Date.now() - startTime)))
   }
 
   const runSpeedTest = async () => {
+    const startTime = Date.now()
+    
+    // Start button animation
+    setButtonAnimations(prev => ({ ...prev, speed: true }))
+    
+    // Ensure minimum 3-second animation
+    const minAnimationTimeout = setTimeout(() => {
+      setButtonAnimations(prev => ({ ...prev, speed: false }))
+    }, 3000)
+
     if (!isOnline) {
       typeText("NO CONNECTION")
+      clearTimeout(minAnimationTimeout)
+      setTimeout(() => {
+        setButtonAnimations(prev => ({ ...prev, speed: false }))
+      }, 3000)
       return
     }
 
@@ -257,6 +311,14 @@ export default function InternetChecker() {
       clearTimeout(testTimeoutId)
     } finally {
       setIsSpeedTesting(false)
+      
+      // Clear the minimum animation timeout if the operation completed early
+      clearTimeout(minAnimationTimeout)
+      // But still ensure we show animation for at least 3 seconds from start
+      setTimeout(() => {
+        setButtonAnimations(prev => ({ ...prev, speed: false }))
+      }, Math.max(0, 3000 - (Date.now() - startTime)))
+      
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
         animationFrameRef.current = null
@@ -700,7 +762,7 @@ export default function InternetChecker() {
             {/* Control Buttons */}
             <div className="flex justify-center items-center gap-4 mb-6 flex-wrap">
               <button onClick={checkConnection} disabled={isChecking} className="terminal-button w-20 h-20" title="Check Connection">
-                {isChecking ? (
+                {(isChecking || buttonAnimations.connection) ? (
                   <RefreshCw className="w-12 h-12 pulse-sonar" />
                 ) : (
                   <RefreshCw className="w-12 h-12" />
@@ -708,7 +770,7 @@ export default function InternetChecker() {
               </button>
 
               <button onClick={checkPing} disabled={isPinging || !isOnline} className="terminal-button w-20 h-20" title="Ping Test">
-                {isPinging ? (
+                {(isPinging || buttonAnimations.ping) ? (
                   <Zap className="w-12 h-12 pulse-sonar" />
                 ) : (
                   <Zap className="w-12 h-12" />
@@ -716,7 +778,7 @@ export default function InternetChecker() {
               </button>
 
               <button onClick={runSpeedTest} disabled={isSpeedTesting || !isOnline} className="terminal-button w-20 h-20" title="Speed Test">
-                {isSpeedTesting ? (
+                {(isSpeedTesting || buttonAnimations.speed) ? (
                   <Activity className="w-12 h-12 pulse-sonar" />
                 ) : (
                   <Activity className="w-12 h-12" />

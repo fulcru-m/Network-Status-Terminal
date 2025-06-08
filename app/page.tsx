@@ -51,6 +51,7 @@ export default function InternetChecker() {
   const TEST_TIMEOUT_SECONDS = 10 // Increased timeout to 10 seconds
 
   const checkConnection = async () => {
+    const startTime = Date.now()
     // Start button animation
     setButtonAnimations(prev => ({ ...prev, connection: true }))
     
@@ -744,112 +745,4 @@ export default function InternetChecker() {
                 <div>
                   <div className="text-2xl mb-2">
                     <span className={getStatusColor()}>{statusText}</span>
-                    <span className={`cursor-blink ${getStatusColor()}`}>{showCursor ? "|" : "\u00A0"}</span>
-                  </div>
-                  {isOnline && (
-                    <div className="text-lg mb-2">
-                      <Globe className="inline w-4 h-4 mr-2" />
-                      IP: {currentIP}
-                    </div>
-                  )}
-                  <div className="text-sm opacity-70">
-                    {isOnline ? "Network connection active" : "Viewing from offline cache"}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Control Buttons */}
-            <div className="flex justify-center items-center gap-4 mb-6 flex-wrap">
-              <button onClick={checkConnection} disabled={isChecking} className="terminal-button w-20 h-20" title="Check Connection">
-                {(isChecking || buttonAnimations.connection) ? (
-                  <RefreshCw className="w-12 h-12 pulse-sonar" />
-                ) : (
-                  <RefreshCw className="w-12 h-12" />
-                )}
-              </button>
-
-              <button onClick={checkPing} disabled={isPinging || !isOnline} className="terminal-button w-20 h-20" title="Ping Test">
-                {(isPinging || buttonAnimations.ping) ? (
-                  <Zap className="w-12 h-12 pulse-sonar" />
-                ) : (
-                  <Zap className="w-12 h-12" />
-                )}
-              </button>
-
-              <button onClick={runSpeedTest} disabled={isSpeedTesting || !isOnline} className="terminal-button w-20 h-20" title="Speed Test">
-                {(isSpeedTesting || buttonAnimations.speed) ? (
-                  <Activity className="w-12 h-12 pulse-sonar" />
-                ) : (
-                  <Activity className="w-12 h-12" />
-                )}
-              </button>
-            </div>
-
-            {/* Speed Test Graph */}
-            {(isSpeedTesting || speedTestSamples.length > 0) && (
-              <div className="mb-6">
-                <div className="text-lg mb-4">
-                  {isSpeedTesting && downloadSpeed !== null 
-                    ? `Current Speed: ${downloadSpeed.toFixed(1)} MBPS`
-                    : downloadSpeed !== null 
-                      ? `Throughput: ${downloadSpeed.toFixed(1)} MBPS`
-                      : "Speed Test Graph"
-                  }
-                </div>
-                <div 
-                  ref={speedGraphRef}
-                  className="w-full h-40 sm:h-52 bg-black border border-[#00cc00] p-1 sm:p-2"
-                >
-                  <canvas 
-                    className="w-full h-full"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Last Checked */}
-            {lastChecked && (
-              <div className="text-center text-sm opacity-70 mb-6">
-                <Clock className="inline w-4 h-4 mr-1" />
-                Last checked: {lastChecked}
-              </div>
-            )}
-
-            {/* Connection History */}
-            {connectionLogs.length > 0 && (
-              <div className="mt-8">
-                <div className="text-lg mb-4">Telemetry Data:</div>
-                <div className="font-mono text-sm max-h-60 overflow-y-auto scrollbar-hide border border-[#333] bg-black/50">
-                  <div className="sticky top-0 z-10 bg-black/90 backdrop-blur-sm border-b border-[#333]">
-                    <div className="flex opacity-70 p-2 text-[#00ff41] text-xs sm:text-sm">
-                      <div className="w-16 sm:w-24 text-left truncate">STATUS</div>
-                      <div className="w-20 sm:w-32 text-left truncate">IP</div>
-                      <div className="flex-1 text-left truncate">TIME</div>
-                    </div>
-                  </div>
-                  <div>
-                    {connectionLogs.map((log, index) => (
-                      <div key={index} className={`flex p-2 text-xs sm:text-sm ${getLogStatusColor(log)} hover:bg-black/30 transition-colors`}>
-                        <div className="w-16 sm:w-24 truncate">{getLogStatusDisplay(log)}</div>
-                        <div className="w-20 sm:w-32 truncate" title={log.ip}>{log.ip}</div>
-                        <div className="flex-1 truncate" title={formatDateTime(log.timestamp)}>{formatDateTime(log.timestamp)}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Settings at Bottom */}
-            <div className="mt-8 text-center">
-              <button onClick={toggleAnimation} className="terminal-button">
-                {animationEnabled ? "VT100 graphics subsystem OFF" : "VT100 graphics subsystem ON"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
+                    <span className={`cursor-blink ${getStatusColor()}`}

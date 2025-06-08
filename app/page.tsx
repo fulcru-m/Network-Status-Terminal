@@ -815,21 +815,20 @@ export default function InternetChecker() {
                 <div className="font-mono text-xs sm:text-sm max-h-60 overflow-y-auto scrollbar-hide border border-[#333] bg-black/50">
                   <div className="sticky top-0 z-10 bg-black/90 backdrop-blur-sm border-b border-[#333]">
                     <div className="flex opacity-70 px-3 py-2 text-[#00ff41] text-xs sm:text-sm font-bold">
-                      <div className="w-20 sm:w-24 text-left">STATUS</div>
-                      <div className="w-24 sm:w-32 text-left">IP</div>
-                      <div className="flex-1 text-left">TIME</div>
+                      <div className="w-16 sm:w-24 text-left">STATUS</div>
+                      <div className="w-20 sm:w-32 text-left">IP</div>
+                      <div className="flex-1 text-left min-w-0">TIME</div>
                     </div>
                   </div>
                   <div>
                     {connectionLogs.map((log, index) => (
                       <div key={index} className={`flex px-3 py-2 text-xs sm:text-sm ${getLogStatusColor(log)} hover:bg-black/30 transition-colors border-b border-[#333]/20 last:border-b-0`}>
-                        <div className="w-20 sm:w-24 font-semibold">{getLogStatusDisplay(log)}</div>
-                        <div className="w-24 sm:w-32 truncate" title={log.ip}>
-                          <span className="sm:hidden">{log.ip.length > 15 ? `...${log.ip.slice(-12)}` : log.ip}</span>
-                          <span className="hidden sm:inline">{log.ip}</span>
+                        <div className="w-16 sm:w-24 font-semibold break-words">{getLogStatusDisplay(log)}</div>
+                        <div className="w-20 sm:w-32 break-all text-xs sm:text-sm" title={log.ip}>
+                          {log.ip}
                         </div>
-                        <div className="flex-1 truncate text-xs sm:text-sm" title={formatDateTime(log.timestamp)}>
-                          <span className="sm:hidden">{new Date(log.timestamp).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <div className="flex-1 min-w-0 break-words text-xs sm:text-sm" title={formatDateTime(log.timestamp)}>
+                          <span className="sm:hidden">{formatDateTime(log.timestamp)}</span>
                           <span className="hidden sm:inline">{formatDateTime(log.timestamp)}</span>
                         </div>
                       </div>

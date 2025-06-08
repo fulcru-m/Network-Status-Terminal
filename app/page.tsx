@@ -771,7 +771,7 @@ export default function InternetChecker() {
             {/* Connection History */}
             {connectionLogs.length > 0 && (
               <div className="mt-8">
-                <div className="text-lg mb-4">Connection History:</div>
+                <div className="text-lg mb-4">Telemetry Data:</div>
                 <div className="font-mono text-sm">
                   <table className="w-full table-fixed">
                     <thead>

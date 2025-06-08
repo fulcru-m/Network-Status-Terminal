@@ -1,5 +1,7 @@
 "use client"
 
+export const dynamic = 'force-dynamic'
+
 import { useState, useEffect, useRef } from "react"
 import { RefreshCw, Clock, Globe, Zap, Activity } from "lucide-react"
 import * as d3 from "d3"

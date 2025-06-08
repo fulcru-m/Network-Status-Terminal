@@ -83,7 +83,7 @@ export default function InternetChecker() {
 
     // Ensure minimum 3-second animation
     const elapsedTime = Date.now() - animationStartTime
-    const remainingTime = Math.max(0, 3000 - elapsedTime)
+    const remainingTime = Math.max(0, 2000 - elapsedTime)
     
     connectionAnimationRef.current = setTimeout(() => {
       setIsChecking(false)
@@ -130,7 +130,7 @@ export default function InternetChecker() {
 
     // Ensure minimum 3-second animation
     const elapsedTime = Date.now() - animationStartTime
-    const remainingTime = Math.max(0, 3000 - elapsedTime)
+    const remainingTime = Math.max(0, 2000 - elapsedTime)
     
     pingAnimationRef.current = setTimeout(() => {
       setIsPinging(false)
@@ -294,7 +294,7 @@ export default function InternetChecker() {
     } finally {
       // Ensure minimum 3-second animation
       const elapsedTime = Date.now() - animationStartTime
-      const remainingTime = Math.max(0, 3000 - elapsedTime)
+      const remainingTime = Math.max(0, 2000 - elapsedTime)
       
       speedAnimationRef.current = setTimeout(() => {
         setIsSpeedTesting(false)

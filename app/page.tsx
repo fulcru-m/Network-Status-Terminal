@@ -42,7 +42,7 @@ export default function InternetChecker() {
   const animationFrameRef = useRef<number | null>(null)
 
   // Speed test parameters
-  const DOWNLOAD_FILE_SIZE_BYTES = 100 * 1024 * 1024 // 100 MB for faster testing
+  const DOWNLOAD_FILE_SIZE_BYTES = 1000 * 1024 * 1024 // 100 MB for faster testing
   const DOWNLOAD_TEST_URL_BASE = "https://speed.cloudflare.com/__down"
   const NUM_PARALLEL_CONNECTIONS = 6
   const GRAPH_SAMPLE_INTERVAL_MS = 200

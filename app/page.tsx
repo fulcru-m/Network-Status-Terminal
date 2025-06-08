@@ -686,45 +686,27 @@ export default function InternetChecker() {
 
             {/* Control Buttons */}
             <div className="flex justify-center items-center gap-4 mb-6 flex-wrap">
-              <button onClick={checkConnection} disabled={isChecking} className="terminal-button w-48 h-12">
+              <button onClick={checkConnection} disabled={isChecking} className="terminal-button w-12 h-12" title="Check Connection">
                 {isChecking ? (
-                  <>
-                    <RefreshCw className="inline w-4 h-4 mr-2 animate-spin" />
-                    SCANNING...
-                  </>
+                  <RefreshCw className="w-5 h-5 animate-spin" />
                 ) : (
-                  <>
-                    <RefreshCw className="inline w-4 h-4 mr-2" />
-                    CHECK CONNECTION
-                  </>
+                  <RefreshCw className="w-5 h-5" />
                 )}
               </button>
 
-              <button onClick={checkPing} disabled={isPinging || !isOnline} className="terminal-button w-48 h-12">
+              <button onClick={checkPing} disabled={isPinging || !isOnline} className="terminal-button w-12 h-12" title="Ping Test">
                 {isPinging ? (
-                  <>
-                    <Zap className="inline w-4 h-4 mr-2 animate-pulse" />
-                    PINGING...
-                  </>
+                  <Zap className="w-5 h-5 animate-pulse" />
                 ) : (
-                  <>
-                    <Zap className="inline w-4 h-4 mr-2" />
-                    PING TEST
-                  </>
+                  <Zap className="w-5 h-5" />
                 )}
               </button>
 
-              <button onClick={runSpeedTest} disabled={isSpeedTesting || !isOnline} className="terminal-button w-48 h-12">
+              <button onClick={runSpeedTest} disabled={isSpeedTesting || !isOnline} className="terminal-button w-12 h-12" title="Speed Test">
                 {isSpeedTesting ? (
-                  <>
-                    <Activity className="inline w-4 h-4 mr-2 animate-pulse" />
-                    TESTING...
-                  </>
+                  <Activity className="w-5 h-5 animate-pulse" />
                 ) : (
-                  <>
-                    <Activity className="inline w-4 h-4 mr-2" />
-                    SPEED TEST
-                  </>
+                  <Activity className="w-5 h-5" />
                 )}
               </button>
             </div>

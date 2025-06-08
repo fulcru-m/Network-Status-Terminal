@@ -129,20 +129,33 @@ input[type="checkbox"] {
   0% {
     transform: scale(1);
     opacity: 1;
+    filter: drop-shadow(0 0 5px var(--matrix-green));
+  }
+  25% {
+    transform: scale(1.2);
+    opacity: 0.8;
+    filter: drop-shadow(0 0 15px var(--matrix-green));
   }
   50% {
     transform: scale(1.4);
-    opacity: 0.5;
+    opacity: 0.6;
+    filter: drop-shadow(0 0 20px var(--matrix-green));
+  }
+  75% {
+    transform: scale(1.2);
+    opacity: 0.8;
+    filter: drop-shadow(0 0 15px var(--matrix-green));
   }
   100% {
     transform: scale(1);
     opacity: 1;
+    filter: drop-shadow(0 0 5px var(--matrix-green));
   }
 }
 
 .pulse-sonar {
-  animation: pulse-sonar 1s ease-in-out infinite;
-  filter: drop-shadow(0 0 10px var(--matrix-green));
+  animation: pulse-sonar 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  transform-origin: center;
 }
 
 /* Hide scrollbar while keeping functionality */

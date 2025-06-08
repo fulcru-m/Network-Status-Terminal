@@ -44,7 +44,7 @@ export default function InternetChecker() {
   // Speed test parameters
   const DOWNLOAD_FILE_SIZE_BYTES = 1000 * 1024 * 1024 // 1000 MB for faster testing
   const DOWNLOAD_TEST_URL_BASE = "https://speed.cloudflare.com/__down"
-  const NUM_PARALLEL_CONNECTIONS = 6
+  const NUM_PARALLEL_CONNECTIONS = 12
   const GRAPH_SAMPLE_INTERVAL_MS = 200
   const TEST_TIMEOUT_SECONDS = 30 // Maximum timeout
   const MINIMUM_TEST_DURATION_SECONDS = 10 // Minimum test duration

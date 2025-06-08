@@ -772,8 +772,8 @@ export default function InternetChecker() {
             {connectionLogs.length > 0 && (
               <div className="mt-8">
                 <div className="text-lg mb-4">Telemetry Data:</div>
-                <div className="font-mono text-sm border border-[#333] max-h-48 overflow-y-auto scrollbar-hide">
-                  <div className="sticky top-0 bg-[var(--terminal-bg)] border-b border-[#333] z-10">
+                <div className="font-mono text-sm max-h-48 overflow-y-auto scrollbar-hide">
+                  <div className="sticky top-0 z-10">
                     <div className="flex opacity-70 p-2 text-[#00ff41]">
                       <div className="w-24 text-left">STATUS</div>
                       <div className="w-32 text-left">IP ADDRESS</div>

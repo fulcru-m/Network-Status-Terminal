@@ -812,20 +812,26 @@ export default function InternetChecker() {
             {connectionLogs.length > 0 && (
               <div className="mt-8">
                 <div className="text-lg mb-4">Telemetry Data:</div>
-                <div className="font-mono text-sm max-h-60 overflow-y-auto scrollbar-hide border border-[#333] bg-black/50">
+                <div className="font-mono text-xs sm:text-sm max-h-60 overflow-y-auto scrollbar-hide border border-[#333] bg-black/50">
                   <div className="sticky top-0 z-10 bg-black/90 backdrop-blur-sm border-b border-[#333]">
-                    <div className="flex opacity-70 p-2 text-[#00ff41] text-xs sm:text-sm">
-                      <div className="w-16 sm:w-24 text-left truncate">STATUS</div>
-                      <div className="w-20 sm:w-32 text-left truncate">IP</div>
-                      <div className="flex-1 text-left truncate">TIME</div>
+                    <div className="flex opacity-70 px-3 py-2 text-[#00ff41] text-xs sm:text-sm font-bold">
+                      <div className="w-20 sm:w-24 text-left">STATUS</div>
+                      <div className="w-24 sm:w-32 text-left">IP</div>
+                      <div className="flex-1 text-left">TIME</div>
                     </div>
                   </div>
                   <div>
                     {connectionLogs.map((log, index) => (
-                      <div key={index} className={`flex p-2 text-xs sm:text-sm ${getLogStatusColor(log)} hover:bg-black/30 transition-colors`}>
-                        <div className="w-16 sm:w-24 truncate">{getLogStatusDisplay(log)}</div>
-                        <div className="w-20 sm:w-32 truncate" title={log.ip}>{log.ip}</div>
-                        <div className="flex-1 truncate" title={formatDateTime(log.timestamp)}>{formatDateTime(log.timestamp)}</div>
+                      <div key={index} className={`flex px-3 py-2 text-xs sm:text-sm ${getLogStatusColor(log)} hover:bg-black/30 transition-colors border-b border-[#333]/20 last:border-b-0`}>
+                        <div className="w-20 sm:w-24 font-semibold">{getLogStatusDisplay(log)}</div>
+                        <div className="w-24 sm:w-32 truncate" title={log.ip}>
+                          <span className="sm:hidden">{log.ip.split('.').slice(-2).join('.')}</span>
+                          <span className="hidden sm:inline">{log.ip}</span>
+                        </div>
+                        <div className="flex-1 truncate text-xs sm:text-sm" title={formatDateTime(log.timestamp)}>
+                          <span className="sm:hidden">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="hidden sm:inline">{formatDateTime(log.timestamp)}</span>
+                        </div>
                       </div>
                     ))}
                   </div>

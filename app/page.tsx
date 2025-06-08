@@ -13,6 +13,21 @@ interface ConnectionLog {
   uploadSpeed?: number
 }
 
+interface SpeedTestResult {
+  downloadSpeed: number
+  uploadSpeed: number
+  latency: number
+  jitter: number
+  server: string
+}
+
+interface SpeedTestProgress {
+  phase: 'initializing' | 'latency' | 'download' | 'upload' | 'complete'
+  progress: number
+  currentSpeed: number
+  message: string
+}
+
 function InternetCheckerContent() {
   const [isOnline, setIsOnline] = useState<boolean | null>(null)
   const [isChecking, setIsChecking] = useState(false)
@@ -26,6 +41,9 @@ function InternetCheckerContent() {
   const [statusText, setStatusText] = useState("")
   const [showCursor, setShowCursor] = useState(true)
   const [currentStatusType, setCurrentStatusType] = useState<"connection" | "ping" | "speedtest">("connection")
+  const [isSpeedTesting, setIsSpeedTesting] = useState(false)
+  const [speedTestResult, setSpeedTestResult] = useState<SpeedTestResult | null>(null)
+  const [speedTestProgress, setSpeedTestProgress] = useState<SpeedTestProgress | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   // Manila-based speed test servers
@@ -761,59 +779,4 @@ function InternetCheckerContent() {
                         <th className="text-left">TIMESTAMP</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {connectionLogs.map((log, index) => (
-                        <tr key={index} className={getLogStatusColor(log)}>
-                          <td className="w-20">{getLogStatusDisplay(log)}</td>
-                          <td className="w-32">{log.status === 'speedtest' ? 'BANDWIDTH' : log.ip}</td>
-                          <td>{formatDateTime(log.timestamp)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Settings at Bottom */}
-            <div className="mt-8 pt-4 border-t border-gray-600 border-opacity-30 space-y-3">
-              <label className="flex items-center text-sm cursor-pointer">
-                <input type="checkbox" checked={animationEnabled} onChange={toggleAnimation} className="w-4 h-4 mr-3" />
-                <span>Enable VT100 graphics subsystem</span>
-              </label>
-
-              <label className="flex items-center text-sm cursor-pointer">
-                <input type="checkbox" checked={useCloudflare} onChange={toggleCloudflare} className="w-4 h-4 mr-3" />
-                <span>Use Cloudflare DNS resolver for latency tests</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export default function InternetChecker() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="w-full max-w-2xl z-10">
-          <div className="terminal-container">
-            <div className="terminal-header">
-              <span>NETWORK STATUS TERMINAL</span>
-            </div>
-            <div className="terminal-content p-6">
-              <div className="text-center">
-                <div className="text-lg mb-2">Loading...</div>
-                <div className="text-sm opacity-70">Please wait</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    }>
-      <InternetCheckerContent />
-    </Suspense>
-  )
-}
+                    

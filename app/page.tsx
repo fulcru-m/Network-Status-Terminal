@@ -40,6 +40,15 @@ export default function InternetChecker() {
   const [totalBytesDownloaded, setTotalBytesDownloaded] = useState(0)
   const abortControllerRef = useRef<AbortController | null>(null)
   const animationFrameRef = useRef<number | null>(null)
+  
+  // D3 refs for direct DOM manipulation
+  const svgRef = useRef<d3.Selection<SVGSVGElement, unknown, null, undefined> | null>(null)
+  const gRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null)
+  const linePathRef = useRef<d3.Selection<SVGPathElement, unknown, null, undefined> | null>(null)
+  const xAxisGRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null)
+  const yAxisGRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null)
+  const xScaleRef = useRef<d3.ScaleLinear<number, number> | null>(null)
+  const yScaleRef = useRef<d3.ScaleLinear<number, number> | null>(null)
 
   // Speed test parameters
   const DOWNLOAD_FILE_SIZE_BYTES = 1000 * 1024 * 1024 // 1000 MB for faster testing
@@ -284,11 +293,20 @@ export default function InternetChecker() {
     }
   }
 
-  const initializeSpeedGraph = () => {
+  const initializeSpeedGraph = useCallback(() => {
     if (!speedGraphRef.current) return
 
     // Clear existing graph
     d3.select(speedGraphRef.current).select("svg").remove()
+    
+    // Reset refs
+    svgRef.current = null
+    gRef.current = null
+    linePathRef.current = null
+    xAxisGRef.current = null
+    yAxisGRef.current = null
+    xScaleRef.current = null
+    yScaleRef.current = null
 
     const container = speedGraphRef.current
     const containerWidth = container.clientWidth
@@ -297,23 +315,34 @@ export default function InternetChecker() {
     const width = containerWidth - margin.left - margin.right
     const height = containerHeight - margin.top - margin.bottom
 
-    const svg = d3.select(container)
+    // Initialize scales
+    xScaleRef.current = d3.scaleLinear()
+      .domain([0, 1])
+      .range([0, width])
+
+    yScaleRef.current = d3.scaleLinear()
+      .domain([0, 1])
+      .range([height, 0])
+
+    svgRef.current = d3.select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", containerHeight)
+
+    gRef.current = svgRef.current
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`)
 
     // Add axes groups
-    svg.append("g")
+    xAxisGRef.current = gRef.current.append("g")
       .attr("class", "x-axis")
       .attr("transform", `translate(0,${height})`)
 
-    svg.append("g")
+    yAxisGRef.current = gRef.current.append("g")
       .attr("class", "y-axis")
 
     // Add axis labels
-    svg.append("text")
+    gRef.current.append("text")
       .attr("class", "axis-label")
       .attr("x", width / 2)
       .attr("y", height + margin.bottom - 10)
@@ -323,7 +352,7 @@ export default function InternetChecker() {
       .style("font-size", "12px")
       .text("TIME (SECONDS)")
 
-    svg.append("text")
+    gRef.current.append("text")
       .attr("class", "axis-label")
       .attr("transform", "rotate(-90)")
       .attr("y", -margin.left + 15)
@@ -335,18 +364,20 @@ export default function InternetChecker() {
       .text("SPEED (MBPS)")
 
     // Add line path
-    svg.append("path")
+    linePathRef.current = gRef.current.append("path")
       .attr("class", "speed-line")
       .style("fill", "none")
       .style("stroke", "#00ff41")
       .style("stroke-width", "2px")
-  }
+  }, [])
 
-  const drawSpeedGraph = (data: SpeedTestSample[], maxTime: number) => {
-    if (!speedGraphRef.current || data.length === 0) {
+  const drawSpeedGraph = useCallback((data: SpeedTestSample[], maxTime: number) => {
+    if (!speedGraphRef.current || data.length === 0 || !gRef.current || !linePathRef.current) {
       console.log("Cannot draw graph: no container or no data", { 
         hasContainer: !!speedGraphRef.current, 
-        dataLength: data.length 
+        dataLength: data.length,
+        hasGRef: !!gRef.current,
+        hasLineRef: !!linePathRef.current
       })
       return
     }
@@ -360,28 +391,15 @@ export default function InternetChecker() {
     const width = containerWidth - margin.left - margin.right
     const height = containerHeight - margin.top - margin.bottom
 
-    // Ensure we have the SVG structure
-    let svg = d3.select(container).select("svg g")
-    if (svg.empty()) {
-      console.log("SVG not found, reinitializing graph")
-      initializeSpeedGraph()
-      svg = d3.select(container).select("svg g")
-    }
-
-    if (svg.empty()) {
-      console.error("Failed to create or find SVG")
-      return
-    }
-
     // Update scales
-    const xScale = d3.scaleLinear()
-      .domain([0, maxTime * 1.05])
-      .range([0, width])
+    if (xScaleRef.current) {
+      xScaleRef.current.domain([0, maxTime * 1.05])
+    }
 
     const maxSpeed = d3.max(data, d => d.speed) || 0
-    const yScale = d3.scaleLinear()
-      .domain([0, Math.max(maxSpeed * 1.2, 1)]) // Ensure minimum domain of 1
-      .range([height, 0])
+    if (yScaleRef.current) {
+      yScaleRef.current.domain([0, Math.max(maxSpeed * 1.2, 1)])
+    }
 
     console.log("Graph scales:", { 
       xDomain: [0, maxTime * 1.05], 
@@ -390,61 +408,64 @@ export default function InternetChecker() {
     })
 
     // Update axes
-    const xAxis = d3.axisBottom(xScale)
+    const xAxis = d3.axisBottom(xScaleRef.current!)
       .ticks(5)
       .tickFormat(d => `${d.toFixed(1)}s`)
 
-    const yAxis = d3.axisLeft(yScale)
+    const yAxis = d3.axisLeft(yScaleRef.current!)
       .ticks(5)
       .tickFormat(d => `${d.toFixed(0)}`)
 
-    svg.select(".x-axis")
+    if (xAxisGRef.current) {
+      xAxisGRef.current
       .transition()
-      .duration(200)
+      .duration(GRAPH_SAMPLE_INTERVAL_MS * 0.8)
+      .ease(d3.easeLinear)
       .call(xAxis)
       .selectAll("text")
       .style("fill", "#00cc00")
       .style("font-family", "Courier New, Monaco, Lucida Console, monospace")
       .style("font-size", "10px")
 
-    // Style axis lines
-    svg.select(".x-axis")
+      // Style axis lines
+      xAxisGRef.current
       .selectAll("path, line")
       .style("stroke", "#006600")
+    }
 
-    svg.select(".y-axis")
+    if (yAxisGRef.current) {
+      yAxisGRef.current
       .transition()
-      .duration(200)
+      .duration(GRAPH_SAMPLE_INTERVAL_MS * 0.8)
+      .ease(d3.easeLinear)
       .call(yAxis)
       .selectAll("text")
       .style("fill", "#00cc00")
       .style("font-family", "Courier New, Monaco, Lucida Console, monospace")
       .style("font-size", "10px")
 
-    svg.select(".y-axis")
+      yAxisGRef.current
       .selectAll("path, line")
       .style("stroke", "#006600")
+    }
 
     // Update line
     const line = d3.line<SpeedTestSample>()
-      .x(d => xScale(d.time))
-      .y(d => yScale(d.speed))
+      .x(d => xScaleRef.current!(d.time))
+      .y(d => yScaleRef.current!(d.speed))
       .curve(d3.curveMonotoneX) // Smooth curve
 
-    const linePath = svg.select(".speed-line")
-      .datum(data)
-
-    if (data.length > 1) {
-      linePath
+    if (linePathRef.current) {
+      linePathRef.current
+        .datum(data)
         .transition()
-        .duration(200)
+        .duration(GRAPH_SAMPLE_INTERVAL_MS * 0.8)
+        .ease(d3.easeLinear)
         .attr("d", line)
-    } else {
-      linePath.attr("d", line)
     }
 
     console.log("Graph updated successfully")
-  }
+  }, [GRAPH_SAMPLE_INTERVAL_MS])
 
   const typeText = (text: string) => {
     // For speed test, update immediately to avoid fast blinking

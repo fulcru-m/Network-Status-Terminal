@@ -815,16 +815,16 @@ export default function InternetChecker() {
                 <div className="font-mono text-xs sm:text-sm max-h-60 overflow-y-auto scrollbar-hide border border-[#333] bg-black/50">
                   <div className="sticky top-0 z-10 bg-black/90 backdrop-blur-sm border-b border-[#333]">
                     <div className="flex opacity-70 px-3 py-2 text-[#00ff41] text-xs sm:text-sm font-bold">
-                      <div className="w-16 sm:w-24 text-left">STATUS</div>
-                      <div className="w-20 sm:w-32 text-left">IP</div>
+                      <div className="w-16 sm:w-24 text-left pr-2 sm:pr-4">STATUS</div>
+                      <div className="w-20 sm:w-32 text-left pr-2 sm:pr-4">IP</div>
                       <div className="flex-1 text-left min-w-0">TIME</div>
                     </div>
                   </div>
                   <div>
                     {connectionLogs.map((log, index) => (
                       <div key={index} className={`flex px-3 py-2 text-xs sm:text-sm ${getLogStatusColor(log)} hover:bg-black/30 transition-colors border-b border-[#333]/20 last:border-b-0`}>
-                        <div className="w-16 sm:w-24 font-semibold break-words">{getLogStatusDisplay(log)}</div>
-                        <div className="w-20 sm:w-32 break-all text-xs sm:text-sm" title={log.ip}>
+                        <div className="w-16 sm:w-24 font-semibold break-words pr-2 sm:pr-4">{getLogStatusDisplay(log)}</div>
+                        <div className="w-20 sm:w-32 break-all text-xs sm:text-sm pr-2 sm:pr-4" title={log.ip}>
                           {log.ip}
                         </div>
                         <div className="flex-1 min-w-0 break-words text-xs sm:text-sm" title={formatDateTime(log.timestamp)}>

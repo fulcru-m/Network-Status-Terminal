@@ -475,7 +475,7 @@ export default function InternetChecker() {
     }
 
     setConnectionLogs((prev) => {
-      const updated = [newLog, ...prev].slice(0, 5)
+      const updated = [newLog, ...prev].slice(0, 20)
       localStorage.setItem("connectionLogs", JSON.stringify(updated))
       return updated
     })
@@ -686,7 +686,7 @@ export default function InternetChecker() {
 
             {/* Control Buttons */}
             <div className="flex justify-center items-center gap-4 mb-6 flex-wrap">
-              <button onClick={checkConnection} disabled={isChecking} className="terminal-button flex-1 max-w-48">
+              <button onClick={checkConnection} disabled={isChecking} className="terminal-button w-48 h-12">
                 {isChecking ? (
                   <>
                     <RefreshCw className="inline w-4 h-4 mr-2 animate-spin" />
@@ -700,7 +700,7 @@ export default function InternetChecker() {
                 )}
               </button>
 
-              <button onClick={checkPing} disabled={isPinging || !isOnline} className="terminal-button flex-1 max-w-48">
+              <button onClick={checkPing} disabled={isPinging || !isOnline} className="terminal-button w-48 h-12">
                 {isPinging ? (
                   <>
                     <Zap className="inline w-4 h-4 mr-2 animate-pulse" />
@@ -714,7 +714,7 @@ export default function InternetChecker() {
                 )}
               </button>
 
-              <button onClick={runSpeedTest} disabled={isSpeedTesting || !isOnline} className="terminal-button flex-1 max-w-48">
+              <button onClick={runSpeedTest} disabled={isSpeedTesting || !isOnline} className="terminal-button w-48 h-12">
                 {isSpeedTesting ? (
                   <>
                     <Activity className="inline w-4 h-4 mr-2 animate-pulse" />
@@ -772,25 +772,23 @@ export default function InternetChecker() {
             {connectionLogs.length > 0 && (
               <div className="mt-8">
                 <div className="text-lg mb-4">Telemetry Data:</div>
-                <div className="font-mono text-sm">
-                  <table className="w-full table-fixed">
-                    <thead>
-                      <tr className="opacity-70">
-                        <th className="text-left w-24">STATUS</th>
-                        <th className="text-left w-32">IP ADDRESS</th>
-                        <th className="text-left">TIMESTAMP</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {connectionLogs.map((log, index) => (
-                        <tr key={index} className={getLogStatusColor(log)}>
-                          <td className="w-24">{getLogStatusDisplay(log)}</td>
-                          <td className="w-32">{log.ip}</td>
-                          <td>{formatDateTime(log.timestamp)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="font-mono text-sm border border-[#333] max-h-40 overflow-y-auto">
+                  <div className="sticky top-0 bg-[var(--terminal-bg)] border-b border-[#333] z-10">
+                    <div className="flex opacity-70 p-2">
+                      <div className="w-24 text-left">STATUS</div>
+                      <div className="w-32 text-left">IP ADDRESS</div>
+                      <div className="flex-1 text-left">TIMESTAMP</div>
+                    </div>
+                  </div>
+                  <div>
+                    {connectionLogs.map((log, index) => (
+                      <div key={index} className={`flex p-2 border-b border-[#333] last:border-b-0 ${getLogStatusColor(log)}`}>
+                        <div className="w-24">{getLogStatusDisplay(log)}</div>
+                        <div className="w-32">{log.ip}</div>
+                        <div className="flex-1">{formatDateTime(log.timestamp)}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}

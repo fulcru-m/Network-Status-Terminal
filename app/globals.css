@@ -131,8 +131,8 @@ input[type="checkbox"] {
     opacity: 1;
   }
   50% {
-    transform: scale(1.1);
-    opacity: 0.7;
+    transform: scale(1.4);
+    opacity: 0.5;
   }
   100% {
     transform: scale(1);
@@ -141,7 +141,8 @@ input[type="checkbox"] {
 }
 
 .pulse-sonar {
-  animation: pulse-sonar 1.2s ease-in-out infinite;
+  animation: pulse-sonar 1s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px var(--matrix-green));
 }
 
 /* Hide scrollbar while keeping functionality */

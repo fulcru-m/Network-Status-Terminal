@@ -46,7 +46,7 @@ export default function InternetChecker() {
   const DOWNLOAD_TEST_URL_BASE = "https://speed.cloudflare.com/__down"
   const NUM_PARALLEL_CONNECTIONS = 10
   const GRAPH_SAMPLE_INTERVAL_MS = 200
-  const TEST_TIMEOUT_SECONDS = 30 // Increased timeout to 30 seconds
+  const TEST_TIMEOUT_SECONDS = 10 // Increased timeout to 30 seconds
 
   const checkConnection = async () => {
     setIsChecking(true)

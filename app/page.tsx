@@ -37,6 +37,11 @@ export default function InternetChecker() {
   const [totalBytesDownloaded, setTotalBytesDownloaded] = useState(0)
   const abortControllerRef = useRef<AbortController | null>(null)
   const animationFrameRef = useRef<number | null>(null)
+  
+  // Animation timing refs
+  const connectionAnimationRef = useRef<NodeJS.Timeout | null>(null)
+  const pingAnimationRef = useRef<NodeJS.Timeout | null>(null)
+  const speedAnimationRef = useRef<NodeJS.Timeout | null>(null)
 
   // Speed test parameters
   const DOWNLOAD_FILE_SIZE_BYTES = 1000 * 1024 * 1024 // 1000 MB for faster testing
@@ -46,8 +51,14 @@ export default function InternetChecker() {
   const TEST_TIMEOUT_SECONDS = 10 // Increased timeout to 10 seconds
 
   const checkConnection = async () => {
+    const animationStartTime = Date.now()
     setIsChecking(true)
     setCurrentStatusType("connection")
+    
+    // Clear any existing animation timeout
+    if (connectionAnimationRef.current) {
+      clearTimeout(connectionAnimationRef.current)
+    }
 
     try {
       const ipResponse = await fetch("https://api.ipify.org?format=json", {
@@ -70,14 +81,27 @@ export default function InternetChecker() {
       typeText("DISCONNECTED")
     }
 
-    setIsChecking(false)
+    // Ensure minimum 3-second animation
+    const elapsedTime = Date.now() - animationStartTime
+    const remainingTime = Math.max(0, 3000 - elapsedTime)
+    
+    connectionAnimationRef.current = setTimeout(() => {
+      setIsChecking(false)
+    }, remainingTime)
+    
     setLastChecked(new Date().toLocaleString())
   }
 
   const checkPing = async () => {
+    const animationStartTime = Date.now()
     setIsPinging(true)
     setCurrentStatusType("ping")
     setPingTime(null)
+    
+    // Clear any existing animation timeout
+    if (pingAnimationRef.current) {
+      clearTimeout(pingAnimationRef.current)
+    }
 
     try {
       const startTime = performance.now()
@@ -104,7 +128,13 @@ export default function InternetChecker() {
       typeText("PING FAILED")
     }
 
-    setIsPinging(false)
+    // Ensure minimum 3-second animation
+    const elapsedTime = Date.now() - animationStartTime
+    const remainingTime = Math.max(0, 3000 - elapsedTime)
+    
+    pingAnimationRef.current = setTimeout(() => {
+      setIsPinging(false)
+    }, remainingTime)
   }
 
   const runSpeedTest = async () => {
@@ -113,11 +143,17 @@ export default function InternetChecker() {
       return
     }
 
+    const animationStartTime = Date.now()
     setIsSpeedTesting(true)
     setCurrentStatusType("speed")
     setDownloadSpeed(null)
     setSpeedTestProgress(0)
     setSpeedTestSamples([])
+    
+    // Clear any existing animation timeout
+    if (speedAnimationRef.current) {
+      clearTimeout(speedAnimationRef.current)
+    }
     
     let totalBytes = 0
     setTotalBytesDownloaded(0)
@@ -256,7 +292,14 @@ export default function InternetChecker() {
       }
       clearTimeout(testTimeoutId)
     } finally {
-      setIsSpeedTesting(false)
+      // Ensure minimum 3-second animation
+      const elapsedTime = Date.now() - animationStartTime
+      const remainingTime = Math.max(0, 3000 - elapsedTime)
+      
+      speedAnimationRef.current = setTimeout(() => {
+        setIsSpeedTesting(false)
+      }, remainingTime)
+      
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
         animationFrameRef.current = null
@@ -598,6 +641,17 @@ export default function InternetChecker() {
     return () => {
       window.removeEventListener("online", handleOnline)
       window.removeEventListener("offline", handleOffline)
+      
+      // Cleanup animation timeouts
+      if (connectionAnimationRef.current) {
+        clearTimeout(connectionAnimationRef.current)
+      }
+      if (pingAnimationRef.current) {
+        clearTimeout(pingAnimationRef.current)
+      }
+      if (speedAnimationRef.current) {
+        clearTimeout(speedAnimationRef.current)
+      }
     }
   }, [])
 

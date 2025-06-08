@@ -686,27 +686,27 @@ export default function InternetChecker() {
 
             {/* Control Buttons */}
             <div className="flex justify-center items-center gap-4 mb-6 flex-wrap">
-              <button onClick={checkConnection} disabled={isChecking} className="terminal-button w-12 h-12" title="Check Connection">
+              <button onClick={checkConnection} disabled={isChecking} className="terminal-button w-20 h-20" title="Check Connection">
                 {isChecking ? (
-                  <RefreshCw className="w-15 h-15 animate-spin" />
+                  <RefreshCw className="w-12 h-12 animate-spin" />
                 ) : (
-                  <RefreshCw className="w-15 h-15" />
+                  <RefreshCw className="w-12 h-12" />
                 )}
               </button>
 
-              <button onClick={checkPing} disabled={isPinging || !isOnline} className="terminal-button w-12 h-12" title="Ping Test">
+              <button onClick={checkPing} disabled={isPinging || !isOnline} className="terminal-button w-20 h-20" title="Ping Test">
                 {isPinging ? (
-                  <Zap className="w-15 h-15 animate-pulse" />
+                  <Zap className="w-12 h-12 animate-pulse" />
                 ) : (
-                  <Zap className="w-15 h-15" />
+                  <Zap className="w-12 h-12" />
                 )}
               </button>
 
-              <button onClick={runSpeedTest} disabled={isSpeedTesting || !isOnline} className="terminal-button w-12 h-12" title="Speed Test">
+              <button onClick={runSpeedTest} disabled={isSpeedTesting || !isOnline} className="terminal-button w-20 h-20" title="Speed Test">
                 {isSpeedTesting ? (
-                  <Activity className="w-15 h-15 animate-pulse" />
+                  <Activity className="w-12 h-12 animate-pulse" />
                 ) : (
-                  <Activity className="w-15 h-15" />
+                  <Activity className="w-12 h-12" />
                 )}
               </button>
             </div>

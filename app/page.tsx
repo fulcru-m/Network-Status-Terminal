@@ -744,3 +744,174 @@ export default function InternetChecker() {
       return "text-red-500"
     }
     return log.status === "online" ? "text-[#00ff41]" : "text-red-500"
+  }
+
+  return (
+    <div className="min-h-screen bg-black text-[#00ff41] font-mono relative overflow-hidden">
+      {/* Matrix Background */}
+      {animationEnabled && (
+        <canvas
+          ref={canvasRef}
+          className="fixed inset-0 pointer-events-none opacity-20"
+          style={{ zIndex: 0 }}
+        />
+      )}
+
+      {/* Main Content */}
+      <div className="relative z-10 p-6">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-2 tracking-wider">
+            INTERNET CONNECTION MONITOR
+          </h1>
+          <div className="text-sm opacity-70">
+            SYSTEM STATUS: {isOnline === null ? "INITIALIZING" : isOnline ? "OPERATIONAL" : "OFFLINE"}
+          </div>
+        </div>
+
+        {/* Main Status Display */}
+        <div className="max-w-4xl mx-auto mb-8">
+          <div className="bg-black border border-[#00ff41] p-6 rounded-lg shadow-lg shadow-[#00ff41]/20">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Connection Status */}
+              <div className="text-center">
+                <div className="flex items-center justify-center mb-2">
+                  <Globe className="w-6 h-6 mr-2" />
+                  <span className="text-lg font-semibold">CONNECTION</span>
+                </div>
+                <div className={`text-2xl font-bold ${getStatusColor()}`}>
+                  {isOnline === null ? "CHECKING..." : isOnline ? "ONLINE" : "OFFLINE"}
+                </div>
+                <div className="text-sm opacity-70 mt-1">
+                  IP: {currentIP || "Unknown"}
+                </div>
+              </div>
+
+              {/* Ping Status */}
+              <div className="text-center">
+                <div className="flex items-center justify-center mb-2">
+                  <Clock className="w-6 h-6 mr-2" />
+                  <span className="text-lg font-semibold">PING</span>
+                </div>
+                <div className={`text-2xl font-bold ${getStatusColor()}`}>
+                  {isPinging ? "TESTING..." : pingTime !== null ? `${pingTime}ms` : "NOT TESTED"}
+                </div>
+                <div className="text-sm opacity-70 mt-1">
+                  Latency to Cloudflare
+                </div>
+              </div>
+
+              {/* Speed Status */}
+              <div className="text-center">
+                <div className="flex items-center justify-center mb-2">
+                  <Zap className="w-6 h-6 mr-2" />
+                  <span className="text-lg font-semibold">SPEED</span>
+                </div>
+                <div className={`text-2xl font-bold ${getStatusColor()}`}>
+                  {isSpeedTesting ? "TESTING..." : downloadSpeed !== null ? `${downloadSpeed.toFixed(1)} MBPS` : "NOT TESTED"}
+                </div>
+                <div className="text-sm opacity-70 mt-1">
+                  Download Speed
+                </div>
+              </div>
+            </div>
+
+            {/* Status Text with Cursor */}
+            <div className="mt-6 text-center">
+              <div className="text-lg font-mono">
+                <span className={getStatusColor()}>
+                  {statusText}
+                  {showCursor && <span className="animate-pulse">_</span>}
+                </span>
+              </div>
+            </div>
+
+            {/* Control Buttons */}
+            <div className="flex flex-wrap justify-center gap-4 mt-6">
+              <button
+                onClick={checkConnection}
+                disabled={isChecking}
+                className="flex items-center px-4 py-2 bg-transparent border border-[#00ff41] text-[#00ff41] hover:bg-[#00ff41] hover:text-black transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${isChecking ? "animate-spin" : ""}`} />
+                {isChecking ? "CHECKING..." : "CHECK CONNECTION"}
+              </button>
+
+              <button
+                onClick={checkPing}
+                disabled={isPinging || !isOnline}
+                className="flex items-center px-4 py-2 bg-transparent border border-[#00ff41] text-[#00ff41] hover:bg-[#00ff41] hover:text-black transition-colors disabled:opacity-50"
+              >
+                <Clock className={`w-4 h-4 mr-2 ${isPinging ? "animate-spin" : ""}`} />
+                {isPinging ? "PINGING..." : "TEST PING"}
+              </button>
+
+              <button
+                onClick={runSpeedTest}
+                disabled={isSpeedTesting || !isOnline}
+                className="flex items-center px-4 py-2 bg-transparent border border-[#00ff41] text-[#00ff41] hover:bg-[#00ff41] hover:text-black transition-colors disabled:opacity-50"
+              >
+                <Zap className={`w-4 h-4 mr-2 ${isSpeedTesting ? "animate-spin" : ""}`} />
+                {isSpeedTesting ? "TESTING..." : "TEST SPEED"}
+              </button>
+
+              <button
+                onClick={toggleAnimation}
+                className="flex items-center px-4 py-2 bg-transparent border border-[#00ff41] text-[#00ff41] hover:bg-[#00ff41] hover:text-black transition-colors"
+              >
+                <Activity className="w-4 h-4 mr-2" />
+                {animationEnabled ? "DISABLE MATRIX" : "ENABLE MATRIX"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Speed Test Graph */}
+        {(isSpeedTesting || speedTestSamples.length > 0) && (
+          <div className="max-w-4xl mx-auto mb-8">
+            <div className="bg-black border border-[#00ff41] p-6 rounded-lg shadow-lg shadow-[#00ff41]/20">
+              <h3 className="text-xl font-bold mb-4 text-center">SPEED TEST GRAPH</h3>
+              <div ref={speedGraphRef} className="w-full h-64 relative">
+                <canvas className="w-full h-full" />
+              </div>
+              {isSpeedTesting && (
+                <div className="mt-4 text-center text-sm opacity-70">
+                  Downloaded: {(totalBytesDownloaded / (1024 * 1024)).toFixed(1)} MB
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Connection Logs */}
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-black border border-[#00ff41] p-6 rounded-lg shadow-lg shadow-[#00ff41]/20">
+            <h3 className="text-xl font-bold mb-4">CONNECTION LOG</h3>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {connectionLogs.length === 0 ? (
+                <div className="text-center opacity-50">No connection logs yet</div>
+              ) : (
+                connectionLogs.map((log, index) => (
+                  <div key={index} className="flex justify-between items-center py-2 border-b border-[#00ff41]/20">
+                    <div className="flex items-center space-x-4">
+                      <span className="text-sm opacity-70">{formatDateTime(log.timestamp)}</span>
+                      <span className="text-sm">{log.ip}</span>
+                    </div>
+                    <span className={`font-bold ${getLogStatusColor(log)}`}>
+                      {getLogStatusDisplay(log)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+            {lastChecked && (
+              <div className="mt-4 text-sm opacity-70 text-center">
+                Last checked: {lastChecked}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -234,9 +234,10 @@ export default function InternetChecker() {
   const getStatusColor = () => {
     if (currentStatusType === "ping" && pingTime !== null) {
       if (pingTime < 100) return "text-[#00ff41]" // Green - Excellent
-      if (pingTime < 200) return "text-blue-400" // Blue - Good
-      if (pingTime < 300) return "text-yellow-400" // Yellow - Fair
-      if (pingTime < 500) return "text-orange-400" // Orange - Poor
+      if (pingTime < 150) return "text-orange-300" // Light orange
+      if (pingTime < 200) return "text-orange-400" // Orange
+      if (pingTime < 300) return "text-orange-500" // Darker orange
+      if (pingTime < 500) return "text-red-400" // Light red
       return "text-red-500" // Red - Very High
     }
     return isOnline ? "text-[#00ff41]" : "text-red-500"
@@ -253,9 +254,10 @@ export default function InternetChecker() {
     if (log.status === "ping") {
       if (!log.pingTime) return "text-red-500"
       if (log.pingTime < 100) return "text-[#00ff41]" // Green - Excellent
-      if (log.pingTime < 200) return "text-blue-400" // Blue - Good
-      if (log.pingTime < 300) return "text-yellow-400" // Yellow - Fair
-      if (log.pingTime < 500) return "text-orange-400" // Orange - Poor
+      if (log.pingTime < 150) return "text-orange-300" // Light orange
+      if (log.pingTime < 200) return "text-orange-400" // Orange
+      if (log.pingTime < 300) return "text-orange-500" // Darker orange
+      if (log.pingTime < 500) return "text-red-400" // Light red
       return "text-red-500"
     }
     return log.status === "online" ? "text-[#00ff41]" : "text-red-500"

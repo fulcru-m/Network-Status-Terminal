@@ -1,9 +1,6 @@
-This Canvas provides a single-page web application designed to test internet download speed with a distinctive DOS-like terminal interface. It leverages HTML for structure, custom CSS for styling, and JavaScript with the D3.js library for functionality and real-time data visualization.
+**Summary of the Code**
 
-Here's a breakdown of the approach and techniques used:
-
-Summary of the Code
-Overall Structure:
+**Overall Structure:**
 
 The application is contained within a single index.html file.
 Styling (<style>) and JavaScript logic (<script>) are embedded directly within the HTML, making it self-contained.
@@ -19,7 +16,8 @@ Subtle scanline overlay (::before pseudo-element on .container) to simulate a CR
 Layout: Instead of traditional UI elements like buttons and input fields, information is presented in div elements styled to look like command-line output lines (.result-line).
 Interactive "Button": The "INITIATE_TEST" is a <button> element, but it's styled to appear as part of the terminal text, complete with a PROMPT> prefix and a blinking _ cursor (::after pseudo-element) when active, reinforcing the command-line interaction. It changes color on hover and disables/enables based on test status.
 No Glow/Shadows: All box-shadow and text-shadow effects are removed to achieve a flat, non-glowing aesthetic, consistent with a plain DOS terminal.
-Speed Test Methodology:
+
+**Speed Test Methodology:**
 
 Latency Test (Ping):
 A quick HEAD request is sent to https://cloudflare.com/cdn-cgi/trace to measure the Round-Trip Time (RTT) in milliseconds.
@@ -38,15 +36,15 @@ The graph's line (.line path) and axes (.axis) are smoothly animated using D3's 
 The X-axis (time) and Y-axis (speed) domains dynamically adjust as more data is collected.
 Test Timeout: A crucial AbortController and setTimeout mechanism is implemented to stop the download test automatically after 10 seconds (TEST_TIMEOUT_SECONDS). If the test isn't completed naturally, it will terminate, and results will reflect the data downloaded within that timeframe.
 Error Handling: try/catch blocks are used to manage network errors or aborted fetches, displaying appropriate messages in the STATUS line and custom alert boxes.
-UI State Management:
+
+**UI State Management:**
 
 The startButton is disabled and its blinking cursor hidden when the test starts.
 A loadingSpinner is displayed during the test.
 Upon test completion (or timeout/error), the startButton is re-enabled, the cursor reappears, and the statusMessage updates, signaling that the system is ready for re-testing.
-In essence, the application provides a robust download speed test wrapped in a meticulously crafted retro DOS terminal aesthetic, complete with dynamic real-time feedback and a smoothly animating graph.
 
 
-
+```javascript
 <!DOCTYPE html>
 <html lang="en">
 <head>

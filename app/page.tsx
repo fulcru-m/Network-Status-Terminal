@@ -1,6 +1,7 @@
 "use client"
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 import { useState, useEffect, useRef } from "react"
 import { RefreshCw, Clock, Globe, Zap, Activity } from "lucide-react"
@@ -784,26 +785,4 @@ export default function InternetChecker() {
                   </div>
                   <div>
                     {connectionLogs.map((log, index) => (
-                      <div key={index} className={`flex p-2 text-xs sm:text-sm ${getLogStatusColor(log)} hover:bg-black/30 transition-colors`}>
-                        <div className="w-16 sm:w-24 truncate">{getLogStatusDisplay(log)}</div>
-                        <div className="w-20 sm:w-32 truncate" title={log.ip}>{log.ip}</div>
-                        <div className="flex-1 truncate" title={formatDateTime(log.timestamp)}>{formatDateTime(log.timestamp)}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Settings at Bottom */}
-            <div className="mt-8 text-center">
-              <button onClick={toggleAnimation} className="terminal-button">
-                {animationEnabled ? "VT100 graphics subsystem OFF" : "VT100 graphics subsystem ON"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
+                      <div key={index} className={`flex p-2 text-xs sm:text-sm ${getLogStatusColor(log)} hover

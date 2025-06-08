@@ -284,64 +284,27 @@ function InternetCheckerContent() {
   }
 
   const performDownloadTest = async (onProgress: (progress: number, speed: number, message: string) => void): Promise<number> => {
-    const testDuration = 12000 // 12 seconds minimum
-    const chunkSize = 50 * 1024 * 1024 // 50MB chunks for gigabit testing
-    const maxChunks = 30 // Up to 1.5GB total
-    const concurrentConnections = 8 // Multiple parallel connections
+    const testDuration = 15000 // 15 seconds
+    const chunkSize = 10 * 1024 * 1024 // 10MB chunks
+    const maxChunks = 20
+    const concurrentConnections = 4
     
     let totalBytes = 0
     let startTime = performance.now()
     let speeds: number[] = []
-    let activeDownloads = 0
-    const maxConcurrent = concurrentConnections
+    let completedChunks = 0
     
-    // Use multiple high-speed test servers
-    const testUrls = [
-      'https://speed.cloudflare.com/__down?bytes=',
-      'https://proof.ovh.net/files/',
-      'https://speedtest.selectel.ru/',
-      'https://lg-sin.fdcservers.net/',
-      'https://speedtest.wdc01.softlayer.com/downloads/'
-    ]
-    
-    const downloadChunk = async (chunkIndex: number): Promise<void> => {
-      if (activeDownloads >= maxConcurrent) return
-      
-      activeDownloads++
+    const downloadChunk = async (chunkIndex: number): Promise<number> => {
       const chunkStart = performance.now()
       
       try {
-        // Try multiple endpoints for better speed
-        const urlIndex = chunkIndex % testUrls.length
-        let response: Response
-        
-        if (urlIndex === 0) {
-          // Cloudflare speed test
-          response = await fetch(`${testUrls[0]}${chunkSize}`, {
-            cache: 'no-cache',
-            mode: 'cors'
-          })
-        } else if (urlIndex === 1) {
-          // OVH test files
-          response = await fetch(`${testUrls[1]}100Mb.dat`, {
-            cache: 'no-cache',
-            mode: 'cors'
-          })
-        } else {
-          // Generate large random data locally and upload to test bandwidth
-          const testData = new ArrayBuffer(chunkSize)
-          const view = new Uint8Array(testData)
-          crypto.getRandomValues(view)
-          
-          response = await fetch('data:application/octet-stream;base64,' + 
-            btoa(String.fromCharCode(...view)), {
-            cache: 'no-cache'
-          })
-        }
+        const response = await fetch(`https://speed.cloudflare.com/__down?bytes=${chunkSize}`, {
+          cache: 'no-cache',
+          mode: 'cors'
+        })
         
         if (!response.ok) throw new Error('Download failed')
         
-        // Stream the response to measure actual download speed
         const reader = response.body?.getReader()
         if (!reader) throw new Error('No response body')
         
@@ -351,154 +314,146 @@ function InternetCheckerContent() {
           const { done, value } = await reader.read()
           if (done) break
           
-          downloadedBytes += value?.length || 0
-          totalBytes += value?.length || 0
-          
-          const elapsed = performance.now() - startTime
-          const currentSpeed = (totalBytes * 8) / (elapsed / 1000) / 1000000 // Mbps
-          
-          onProgress(
-            Math.min((elapsed / testDuration) * 100, 100),
-            currentSpeed,
-            `PARALLEL DOWNLOAD ${chunkIndex + 1} @ ${currentSpeed.toFixed(1)} Mbps`
-          )
+          if (value) {
+            downloadedBytes += value.length
+          }
         }
         
         const chunkTime = performance.now() - chunkStart
-        const chunkSpeed = (downloadedBytes * 8) / (chunkTime / 1000) / 1000000 // Mbps
-        speeds.push(chunkSpeed)
+        const chunkSpeedMbps = (downloadedBytes * 8) / (chunkTime / 1000) / 1000000
+        
+        totalBytes += downloadedBytes
+        completedChunks++
+        
+        const elapsed = performance.now() - startTime
+        const overallSpeed = (totalBytes * 8) / (elapsed / 1000) / 1000000
+        
+        onProgress(
+          Math.min((elapsed / testDuration) * 100, 100),
+          overallSpeed,
+          `DOWNLOAD CHUNK ${completedChunks}/${maxChunks} @ ${overallSpeed.toFixed(1)} Mbps`
+        )
+        
+        return chunkSpeedMbps
         
       } catch (error) {
-        console.warn(`Download chunk ${chunkIndex} failed:`, error)
-        // Try alternative method - generate data locally to test processing speed
-        try {
-          const testData = new ArrayBuffer(chunkSize)
-          const view = new Uint8Array(testData)
-          
-          // Simulate high-speed data processing
-          for (let i = 0; i < view.length; i += 1024) {
-            view[i] = Math.random() * 255
-          }
-          
-          totalBytes += testData.byteLength
-          const chunkTime = performance.now() - chunkStart
-          const chunkSpeed = (testData.byteLength * 8) / (chunkTime / 1000) / 1000000
-          speeds.push(chunkSpeed)
-        } catch (fallbackError) {
-          console.warn('Fallback also failed:', fallbackError)
-        }
+        return 0
       }
-      
-      activeDownloads--
     }
     
-    // Start multiple concurrent downloads
-    const downloadPromises: Promise<void>[] = []
-    
-    for (let chunk = 0; chunk < maxChunks; chunk++) {
-      // Control concurrency
-      while (activeDownloads >= maxConcurrent) {
-        await new Promise(resolve => setTimeout(resolve, 10))
+    // Run chunks in batches
+    for (let batch = 0; batch < Math.ceil(maxChunks / concurrentConnections); batch++) {
+      const batchPromises: Promise<number>[] = []
+      
+      for (let i = 0; i < concurrentConnections && (batch * concurrentConnections + i) < maxChunks; i++) {
+        const chunkIndex = batch * concurrentConnections + i
+        batchPromises.push(downloadChunk(chunkIndex))
       }
       
-      downloadPromises.push(downloadChunk(chunk))
+      const batchSpeeds = await Promise.all(batchPromises)
+      speeds.push(...batchSpeeds.filter(speed => speed > 0))
       
-      // Check if we should stop
       const elapsed = performance.now() - startTime
-      if (elapsed > testDuration && speeds.length > 10) {
-        const recentSpeeds = speeds.slice(-5)
-        const avgRecent = recentSpeeds.reduce((a, b) => a + b, 0) / recentSpeeds.length
-        const variance = recentSpeeds.reduce((sum, speed) => sum + Math.pow(speed - avgRecent, 2), 0) / recentSpeeds.length
-        
-        if (variance < avgRecent * 0.15) { // Speed is stable
-          break
-        }
+      if (elapsed > testDuration && speeds.length > 5) {
+        break
       }
-      
-      await new Promise(resolve => setTimeout(resolve, 20))
     }
     
-    // Wait for all downloads to complete
-    await Promise.all(downloadPromises)
-    
-    const totalTime = performance.now() - startTime
-    const finalSpeed = (totalBytes * 8) / (totalTime / 1000) / 1000000 // Mbps
-    
-    // Return the maximum sustained speed from recent measurements
-    if (speeds.length > 5) {
-      const recentSpeeds = speeds.slice(-Math.min(10, speeds.length))
-      return Math.max(...recentSpeeds)
+    if (speeds.length === 0) {
+      return 0
     }
     
-    return finalSpeed
+    // Return average of top 50% speeds
+    const sortedSpeeds = speeds.sort((a, b) => b - a)
+    const topHalf = sortedSpeeds.slice(0, Math.ceil(sortedSpeeds.length / 2))
+    return topHalf.reduce((sum, speed) => sum + speed, 0) / topHalf.length
   }
 
   const performUploadTest = async (onProgress: (progress: number, speed: number, message: string) => void): Promise<number> => {
-    const testDuration = 12000 // 12 seconds minimum
-    const chunkSize = 25 * 1024 * 1024 // 25MB chunks for upload
-    const maxChunks = 60 // Up to 1.5GB total
-    const concurrentConnections = 6 // Multiple parallel uploads
+    const testDuration = 15000 // 15 seconds
+    const chunkSize = 5 * 1024 * 1024 // 5MB chunks
+    const maxChunks = 20
+    const concurrentConnections = 3
     
     let totalBytes = 0
     let startTime = performance.now()
     let speeds: number[] = []
-    let activeUploads = 0
-    const maxConcurrent = concurrentConnections
+    let completedChunks = 0
     
-    // Generate random data for upload
     const generateRandomData = (size: number) => {
       const buffer = new ArrayBuffer(size)
       const view = new Uint8Array(buffer)
-      crypto.getRandomValues(view) // Use crypto for faster random generation
+      crypto.getRandomValues(view)
       return buffer
     }
     
-    // Upload endpoints that can handle high-speed uploads
-    const uploadUrls = [
-      'https://httpbin.org/post',
-      'https://postman-echo.com/post',
-      'https://webhook.site/unique-id', // Replace with actual webhook if needed
-      'https://httpbin.org/put'
-    ]
-    
-    const uploadChunk = async (chunkIndex: number): Promise<void> => {
-      if (activeUploads >= maxConcurrent) return
-      
-      activeUploads++
+    const uploadChunk = async (chunkIndex: number): Promise<number> => {
       const chunkStart = performance.now()
       
       try {
-        // Pre-generate data to avoid timing issues
         const uploadData = generateRandomData(chunkSize)
-        const urlIndex = chunkIndex % uploadUrls.length
         
-        const response = await fetch(uploadUrls[urlIndex], {
+        const response = await fetch('https://httpbin.org/post', {
           method: 'POST',
           body: uploadData,
           cache: 'no-cache',
           mode: 'cors',
           headers: {
-            'Content-Type': 'application/octet-stream',
-            'Content-Length': uploadData.byteLength.toString()
+            'Content-Type': 'application/octet-stream'
           }
         })
         
-        // Don't wait for response body for upload speed test
-        if (response.ok) {
-          totalBytes += uploadData.byteLength
-          
-          const chunkTime = performance.now() - chunkStart
-          const chunkSpeed = (uploadData.byteLength * 8) / (chunkTime / 1000) / 1000000 // Mbps
-          speeds.push(chunkSpeed)
-          
-          const elapsed = performance.now() - startTime
-          const currentSpeed = (totalBytes * 8) / (elapsed / 1000) / 1000000 // Mbps
-          
-          onProgress(
-            Math.min((elapsed / testDuration) * 100, 100),
-            currentSpeed,
-            `PARALLEL UPLOAD ${chunkIndex + 1} @ ${currentSpeed.toFixed(1)} Mbps`
-          )
+        if (!response.ok) throw new Error('Upload failed')
+        
+        const chunkTime = performance.now() - chunkStart
+        const chunkSpeedMbps = (uploadData.byteLength * 8) / (chunkTime / 1000) / 1000000
+        
+        totalBytes += uploadData.byteLength
+        completedChunks++
+        
+        const elapsed = performance.now() - startTime
+        const overallSpeed = (totalBytes * 8) / (elapsed / 1000) / 1000000
+        
+        onProgress(
+          Math.min((elapsed / testDuration) * 100, 100),
+          overallSpeed,
+          `UPLOAD CHUNK ${completedChunks}/${maxChunks} @ ${overallSpeed.toFixed(1)} Mbps`
+        )
+        
+        return chunkSpeedMbps
+        
+      } catch (error) {
+        return 0
+      }
+    }
+    
+    // Run chunks in batches
+    for (let batch = 0; batch < Math.ceil(maxChunks / concurrentConnections); batch++) {
+      const batchPromises: Promise<number>[] = []
+      
+      for (let i = 0; i < concurrentConnections && (batch * concurrentConnections + i) < maxChunks; i++) {
+        const chunkIndex = batch * concurrentConnections + i
+        batchPromises.push(uploadChunk(chunkIndex))
+      }
+      
+      const batchSpeeds = await Promise.all(batchPromises)
+      speeds.push(...batchSpeeds.filter(speed => speed > 0))
+      
+      const elapsed = performance.now() - startTime
+      if (elapsed > testDuration && speeds.length > 5) {
+        break
+      }
+    }
+    
+    if (speeds.length === 0) {
+      return 0
+    }
+    
+    // Return average of top 50% speeds
+    const sortedSpeeds = speeds.sort((a, b) => b - a)
+    const topHalf = sortedSpeeds.slice(0, Math.ceil(sortedSpeeds.length / 2))
+    return topHalf.reduce((sum, speed) => sum + speed, 0) / topHalf.length
+  }
         }
         
       } catch (error) {

@@ -772,9 +772,9 @@ export default function InternetChecker() {
             {connectionLogs.length > 0 && (
               <div className="mt-8">
                 <div className="text-lg mb-4">Telemetry Data:</div>
-                <div className="font-mono text-sm border border-[#333] max-h-40 overflow-y-auto">
+                <div className="font-mono text-sm border border-[#333] max-h-48 overflow-y-auto scrollbar-hide">
                   <div className="sticky top-0 bg-[var(--terminal-bg)] border-b border-[#333] z-10">
-                    <div className="flex opacity-70 p-2">
+                    <div className="flex opacity-70 p-2 text-[#00ff41]">
                       <div className="w-24 text-left">STATUS</div>
                       <div className="w-32 text-left">IP ADDRESS</div>
                       <div className="flex-1 text-left">TIMESTAMP</div>
@@ -782,7 +782,7 @@ export default function InternetChecker() {
                   </div>
                   <div>
                     {connectionLogs.map((log, index) => (
-                      <div key={index} className={`flex p-2 border-b border-[#333] last:border-b-0 ${getLogStatusColor(log)}`}>
+                      <div key={index} className={`flex p-2 ${getLogStatusColor(log)}`}>
                         <div className="w-24">{getLogStatusDisplay(log)}</div>
                         <div className="w-32">{log.ip}</div>
                         <div className="flex-1">{formatDateTime(log.timestamp)}</div>

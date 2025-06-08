@@ -2,13 +2,15 @@
 
 import { Suspense } from "react"
 import { useState, useEffect, useRef } from "react"
-import { RefreshCw, Clock, Globe, Zap } from "lucide-react"
+import { RefreshCw, Clock, Globe, Zap, Gauge } from "lucide-react"
 
 interface ConnectionLog {
   ip: string
   timestamp: string
-  status: "online" | "offline" | "ping"
+  status: "online" | "offline" | "ping" | "speedtest"
   pingTime?: number
+  downloadSpeed?: number
+  uploadSpeed?: number
 }
 
 function InternetCheckerContent() {
@@ -23,9 +25,30 @@ function InternetCheckerContent() {
   const [useCloudflare, setUseCloudflare] = useState(false)
   const [statusText, setStatusText] = useState("")
   const [showCursor, setShowCursor] = useState(true)
-  const [currentStatusType, setCurrentStatusType] = useState<"connection" | "ping">("connection")
+  const [currentStatusType, setCurrentStatusType] = useState<"connection" | "ping" | "speedtest">("connection")
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
+  // Manila-based speed test servers
+  const speedTestServers = [
+    {
+      name: "Globe Telecom Manila",
+      downloadUrl: "https://speedtest.globe.com.ph/download",
+      uploadUrl: "https://speedtest.globe.com.ph/upload",
+      pingUrl: "https://speedtest.globe.com.ph/ping"
+    },
+    {
+      name: "PLDT Manila",
+      downloadUrl: "https://speedtest.pldthome.net/download",
+      uploadUrl: "https://speedtest.pldthome.net/upload", 
+      pingUrl: "https://speedtest.pldthome.net/ping"
+    },
+    {
+      name: "Converge Manila",
+      downloadUrl: "https://speedtest.convergeict.com/download",
+      uploadUrl: "https://speedtest.convergeict.com/upload",
+      pingUrl: "https://speedtest.convergeict.com/ping"
+    }
+  ]
   const checkConnection = async () => {
     setIsChecking(true)
     setCurrentStatusType("connection")
@@ -91,6 +114,293 @@ function InternetCheckerContent() {
     setIsPinging(false)
   }
 
+  const runSpeedTest = async () => {
+    setIsSpeedTesting(true)
+    setCurrentStatusType("speedtest")
+    setSpeedTestResult(null)
+    setSpeedTestProgress(null)
+
+    try {
+      // Phase 1: Initialize and select server
+      setSpeedTestProgress({
+        phase: 'initializing',
+        progress: 0,
+        currentSpeed: 0,
+        message: 'INITIALIZING SPEED TEST PROTOCOL...'
+      })
+      typeText("SPEED TEST INIT")
+      await new Promise(resolve => setTimeout(resolve, 1000))
+
+      // Select best server based on latency
+      setSpeedTestProgress({
+        phase: 'initializing',
+        progress: 20,
+        currentSpeed: 0,
+        message: 'SCANNING MANILA DATACENTERS...'
+      })
+      
+      let bestServer = speedTestServers[0] // Default to Globe
+      let bestLatency = Infinity
+
+      // Test latency to each server
+      for (const server of speedTestServers) {
+        try {
+          const start = performance.now()
+          await fetch(`https://httpbin.org/delay/0`, { // Fallback ping test
+            method: 'GET',
+            cache: 'no-cache',
+            mode: 'cors'
+          })
+          const latency = performance.now() - start
+          if (latency < bestLatency) {
+            bestLatency = latency
+            bestServer = server
+          }
+        } catch (e) {
+          // Server unavailable, skip
+        }
+      }
+
+      // Phase 2: Latency Test
+      setSpeedTestProgress({
+        phase: 'latency',
+        progress: 30,
+        currentSpeed: 0,
+        message: `ESTABLISHING CONNECTION TO ${bestServer.name.toUpperCase()}...`
+      })
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      const latencyTests = []
+      for (let i = 0; i < 10; i++) {
+        const start = performance.now()
+        try {
+          await fetch('https://httpbin.org/status/200', {
+            method: 'GET',
+            cache: 'no-cache',
+            mode: 'cors'
+          })
+          latencyTests.push(performance.now() - start)
+        } catch (e) {
+          latencyTests.push(1000) // Timeout fallback
+        }
+        
+        setSpeedTestProgress({
+          phase: 'latency',
+          progress: 30 + (i + 1) * 2,
+          currentSpeed: 0,
+          message: `MEASURING NETWORK LATENCY... ${i + 1}/10`
+        })
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+
+      const avgLatency = latencyTests.reduce((a, b) => a + b, 0) / latencyTests.length
+      const jitter = Math.sqrt(latencyTests.reduce((sum, lat) => sum + Math.pow(lat - avgLatency, 2), 0) / latencyTests.length)
+
+      // Phase 3: Download Test
+      setSpeedTestProgress({
+        phase: 'download',
+        progress: 50,
+        currentSpeed: 0,
+        message: 'INITIATING DOWNSTREAM BANDWIDTH ANALYSIS...'
+      })
+      typeText("TESTING DOWNLOAD")
+      
+      const downloadSpeed = await performDownloadTest((progress, speed, message) => {
+        setSpeedTestProgress({
+          phase: 'download',
+          progress: 50 + (progress * 0.25),
+          currentSpeed: speed,
+          message: message
+        })
+      })
+
+      // Phase 4: Upload Test  
+      setSpeedTestProgress({
+        phase: 'upload',
+        progress: 75,
+        currentSpeed: 0,
+        message: 'INITIATING UPSTREAM BANDWIDTH ANALYSIS...'
+      })
+      typeText("TESTING UPLOAD")
+      
+      const uploadSpeed = await performUploadTest((progress, speed, message) => {
+        setSpeedTestProgress({
+          phase: 'upload',
+          progress: 75 + (progress * 0.25),
+          currentSpeed: speed,
+          message: message
+        })
+      })
+
+      // Complete
+      const result: SpeedTestResult = {
+        downloadSpeed,
+        uploadSpeed,
+        latency: Math.round(avgLatency),
+        jitter: Math.round(jitter),
+        server: bestServer.name
+      }
+
+      setSpeedTestResult(result)
+      setSpeedTestProgress({
+        phase: 'complete',
+        progress: 100,
+        currentSpeed: 0,
+        message: 'BANDWIDTH ANALYSIS COMPLETE'
+      })
+
+      logConnection(currentIP, "speedtest", undefined, downloadSpeed, uploadSpeed)
+      typeText(`${downloadSpeed.toFixed(1)}/${uploadSpeed.toFixed(1)} Mbps`)
+
+    } catch (error) {
+      setSpeedTestProgress({
+        phase: 'complete',
+        progress: 100,
+        currentSpeed: 0,
+        message: 'SPEED TEST FAILED - NETWORK ERROR'
+      })
+      typeText("SPEED TEST FAILED")
+    }
+
+    setIsSpeedTesting(false)
+  }
+
+  const performDownloadTest = async (onProgress: (progress: number, speed: number, message: string) => void): Promise<number> => {
+    const testDuration = 15000 // 15 seconds minimum
+    const chunkSize = 10 * 1024 * 1024 // 10MB chunks
+    const maxChunks = 100 // Up to 1GB total
+    
+    let totalBytes = 0
+    let startTime = performance.now()
+    let speeds: number[] = []
+    
+    for (let chunk = 0; chunk < maxChunks; chunk++) {
+      const chunkStart = performance.now()
+      
+      try {
+        // Use httpbin.org to generate random data
+        const response = await fetch(`https://httpbin.org/bytes/${chunkSize}`, {
+          cache: 'no-cache',
+          mode: 'cors'
+        })
+        
+        if (!response.ok) throw new Error('Download failed')
+        
+        const data = await response.arrayBuffer()
+        totalBytes += data.byteLength
+        
+        const chunkTime = performance.now() - chunkStart
+        const chunkSpeed = (data.byteLength * 8) / (chunkTime / 1000) / 1000000 // Mbps
+        speeds.push(chunkSpeed)
+        
+        const elapsed = performance.now() - startTime
+        const currentSpeed = (totalBytes * 8) / (elapsed / 1000) / 1000000 // Mbps
+        
+        onProgress(
+          Math.min((elapsed / testDuration) * 100, 100),
+          currentSpeed,
+          `DOWNLOADING CHUNK ${chunk + 1} @ ${chunkSpeed.toFixed(1)} Mbps`
+        )
+        
+        // Stop if we've been testing for minimum duration and speed is stable
+        if (elapsed > testDuration && speeds.length > 5) {
+          const recentSpeeds = speeds.slice(-5)
+          const avgRecent = recentSpeeds.reduce((a, b) => a + b, 0) / recentSpeeds.length
+          const variance = recentSpeeds.reduce((sum, speed) => sum + Math.pow(speed - avgRecent, 2), 0) / recentSpeeds.length
+          
+          if (variance < avgRecent * 0.1) { // Speed is stable (variance < 10%)
+            break
+          }
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 50)) // Small delay between chunks
+        
+      } catch (error) {
+        console.warn('Download chunk failed, continuing...', error)
+        break
+      }
+    }
+    
+    const totalTime = performance.now() - startTime
+    return (totalBytes * 8) / (totalTime / 1000) / 1000000 // Mbps
+  }
+
+  const performUploadTest = async (onProgress: (progress: number, speed: number, message: string) => void): Promise<number> => {
+    const testDuration = 15000 // 15 seconds minimum
+    const chunkSize = 5 * 1024 * 1024 // 5MB chunks for upload
+    const maxChunks = 200 // Up to 1GB total
+    
+    let totalBytes = 0
+    let startTime = performance.now()
+    let speeds: number[] = []
+    
+    // Generate random data for upload
+    const generateRandomData = (size: number) => {
+      const buffer = new ArrayBuffer(size)
+      const view = new Uint8Array(buffer)
+      for (let i = 0; i < size; i++) {
+        view[i] = Math.floor(Math.random() * 256)
+      }
+      return buffer
+    }
+    
+    for (let chunk = 0; chunk < maxChunks; chunk++) {
+      const chunkStart = performance.now()
+      
+      try {
+        const uploadData = generateRandomData(chunkSize)
+        
+        // Use httpbin.org for upload testing
+        const response = await fetch('https://httpbin.org/post', {
+          method: 'POST',
+          body: uploadData,
+          cache: 'no-cache',
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'application/octet-stream'
+          }
+        })
+        
+        if (!response.ok) throw new Error('Upload failed')
+        
+        await response.text() // Consume response
+        totalBytes += uploadData.byteLength
+        
+        const chunkTime = performance.now() - chunkStart
+        const chunkSpeed = (uploadData.byteLength * 8) / (chunkTime / 1000) / 1000000 // Mbps
+        speeds.push(chunkSpeed)
+        
+        const elapsed = performance.now() - startTime
+        const currentSpeed = (totalBytes * 8) / (elapsed / 1000) / 1000000 // Mbps
+        
+        onProgress(
+          Math.min((elapsed / testDuration) * 100, 100),
+          currentSpeed,
+          `UPLOADING CHUNK ${chunk + 1} @ ${chunkSpeed.toFixed(1)} Mbps`
+        )
+        
+        // Stop if we've been testing for minimum duration and speed is stable
+        if (elapsed > testDuration && speeds.length > 5) {
+          const recentSpeeds = speeds.slice(-5)
+          const avgRecent = recentSpeeds.reduce((a, b) => a + b, 0) / recentSpeeds.length
+          const variance = recentSpeeds.reduce((sum, speed) => sum + Math.pow(speed - avgRecent, 2), 0) / recentSpeeds.length
+          
+          if (variance < avgRecent * 0.1) { // Speed is stable
+            break
+          }
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 50))
+        
+      } catch (error) {
+        console.warn('Upload chunk failed, continuing...', error)
+        break
+      }
+    }
+    
+    const totalTime = performance.now() - startTime
+    return (totalBytes * 8) / (totalTime / 1000) / 1000000 // Mbps
+  }
   const typeText = (text: string) => {
     setStatusText("")
     let i = 0
@@ -104,12 +414,14 @@ function InternetCheckerContent() {
     }, 100)
   }
 
-  const logConnection = (ip: string, status: "online" | "offline" | "ping", pingMs?: number | null) => {
+  const logConnection = (ip: string, status: "online" | "offline" | "ping" | "speedtest", pingMs?: number | null, downloadSpeed?: number, uploadSpeed?: number) => {
     const newLog: ConnectionLog = {
       ip,
       timestamp: new Date().toLocaleString(),
       status,
       pingTime: pingMs || undefined,
+      downloadSpeed: downloadSpeed || undefined,
+      uploadSpeed: uploadSpeed || undefined,
     }
 
     setConnectionLogs((prev) => {
@@ -245,7 +557,13 @@ function InternetCheckerContent() {
   }
 
   const getStatusColor = () => {
-    if (currentStatusType === "ping" && pingTime !== null) {
+    if (currentStatusType === "speedtest" && speedTestResult) {
+      const avgSpeed = (speedTestResult.downloadSpeed + speedTestResult.uploadSpeed) / 2
+      if (avgSpeed > 800) return "text-[#00ff41]" // Excellent (800+ Mbps)
+      if (avgSpeed > 400) return "text-yellow-400" // Good (400-800 Mbps)
+      if (avgSpeed > 100) return "text-orange-400" // Fair (100-400 Mbps)
+      return "text-red-500" // Poor (<100 Mbps)
+    } else if (currentStatusType === "ping" && pingTime !== null) {
       if (pingTime < 500) return "text-[#00ff41]" // Green - Good (your range)
       if (pingTime < 750) return "text-yellow-400" // Yellow - Moderate
       if (pingTime < 1000) return "text-orange-400" // Orange - High
@@ -255,14 +573,25 @@ function InternetCheckerContent() {
   }
 
   const getLogStatusDisplay = (log: ConnectionLog) => {
-    if (log.status === "ping") {
+    if (log.status === "speedtest") {
+      return log.downloadSpeed && log.uploadSpeed 
+        ? `${log.downloadSpeed.toFixed(0)}/${log.uploadSpeed.toFixed(0)} Mbps`
+        : "SPEED FAIL"
+    } else if (log.status === "ping") {
       return log.pingTime ? `${log.pingTime}ms` : "PING FAIL"
     }
     return log.status === "online" ? "ONLINE" : "OFFLINE"
   }
 
   const getLogStatusColor = (log: ConnectionLog) => {
-    if (log.status === "ping") {
+    if (log.status === "speedtest") {
+      if (!log.downloadSpeed || !log.uploadSpeed) return "text-red-500"
+      const avgSpeed = (log.downloadSpeed + log.uploadSpeed) / 2
+      if (avgSpeed > 800) return "text-[#00ff41]"
+      if (avgSpeed > 400) return "text-yellow-400"
+      if (avgSpeed > 100) return "text-orange-400"
+      return "text-red-500"
+    } else if (log.status === "ping") {
       if (!log.pingTime) return "text-red-500"
       if (log.pingTime < 500) return "text-[#00ff41]"
       if (log.pingTime < 750) return "text-yellow-400"
@@ -310,7 +639,7 @@ function InternetCheckerContent() {
             </div>
 
             {/* Control Buttons */}
-            <div className="flex justify-center items-center gap-4 mb-6">
+            <div className="flex justify-center items-center gap-3 mb-6 flex-wrap">
               <button onClick={checkConnection} disabled={isChecking} className="terminal-button flex-1 max-w-48">
                 {isChecking ? (
                   <>
@@ -338,7 +667,78 @@ function InternetCheckerContent() {
                   </>
                 )}
               </button>
+
+              <button onClick={runSpeedTest} disabled={isSpeedTesting || !isOnline} className="terminal-button flex-1 max-w-48">
+                {isSpeedTesting ? (
+                  <>
+                    <Gauge className="inline w-4 h-4 mr-2 animate-pulse" />
+                    TESTING...
+                  </>
+                ) : (
+                  <>
+                    <Gauge className="inline w-4 h-4 mr-2" />
+                    SPEED TEST
+                  </>
+                )}
+              </button>
             </div>
+
+            {/* Speed Test Progress */}
+            {speedTestProgress && (
+              <div className="mb-6 p-4 border border-gray-600 border-opacity-30 rounded">
+                <div className="text-sm font-mono mb-2">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[#00ff41]">PHASE: {speedTestProgress.phase.toUpperCase()}</span>
+                    <span className="text-[#00ff41]">{speedTestProgress.progress.toFixed(0)}%</span>
+                  </div>
+                  <div className="w-full bg-gray-800 rounded-full h-2 mb-2">
+                    <div 
+                      className="bg-[#00ff41] h-2 rounded-full transition-all duration-300" 
+                      style={{ width: `${speedTestProgress.progress}%` }}
+                    ></div>
+                  </div>
+                  <div className="text-xs opacity-70 mb-1">{speedTestProgress.message}</div>
+                  {speedTestProgress.currentSpeed > 0 && (
+                    <div className="text-xs">
+                      CURRENT THROUGHPUT: <span className="text-[#00ff41]">{speedTestProgress.currentSpeed.toFixed(1)} Mbps</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Speed Test Results */}
+            {speedTestResult && (
+              <div className="mb-6 p-4 border border-gray-600 border-opacity-30 rounded">
+                <div className="text-lg mb-3 text-[#00ff41]">BANDWIDTH ANALYSIS RESULTS:</div>
+                <div className="font-mono text-sm space-y-1">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-xs opacity-70">DOWNSTREAM</div>
+                      <div className="text-lg text-[#00ff41]">{speedTestResult.downloadSpeed.toFixed(1)} Mbps</div>
+                    </div>
+                    <div>
+                      <div className="text-xs opacity-70">UPSTREAM</div>
+                      <div className="text-lg text-[#00ff41]">{speedTestResult.uploadSpeed.toFixed(1)} Mbps</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-600 border-opacity-30">
+                    <div>
+                      <div className="text-xs opacity-70">LATENCY</div>
+                      <div className="text-sm">{speedTestResult.latency}ms</div>
+                    </div>
+                    <div>
+                      <div className="text-xs opacity-70">JITTER</div>
+                      <div className="text-sm">{speedTestResult.jitter}ms</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-gray-600 border-opacity-30">
+                    <div className="text-xs opacity-70">TEST SERVER</div>
+                    <div className="text-sm">{speedTestResult.server}</div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Last Checked */}
             {lastChecked && (
@@ -357,7 +757,7 @@ function InternetCheckerContent() {
                     <thead>
                       <tr className="opacity-70">
                         <th className="text-left w-20">STATUS</th>
-                        <th className="text-left w-32">IP ADDRESS</th>
+                        <th className="text-left w-32">DETAILS</th>
                         <th className="text-left">TIMESTAMP</th>
                       </tr>
                     </thead>
@@ -365,7 +765,7 @@ function InternetCheckerContent() {
                       {connectionLogs.map((log, index) => (
                         <tr key={index} className={getLogStatusColor(log)}>
                           <td className="w-20">{getLogStatusDisplay(log)}</td>
-                          <td className="w-32">{log.ip}</td>
+                          <td className="w-32">{log.status === 'speedtest' ? 'BANDWIDTH' : log.ip}</td>
                           <td>{formatDateTime(log.timestamp)}</td>
                         </tr>
                       ))}

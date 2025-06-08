@@ -155,9 +155,21 @@ export default function InternetChecker() {
         setDownloadSpeed(currentSpeed)
         setTotalBytesDownloaded(totalBytes)
         
-        // Fix progress calculation to properly reach 100%
-        const progress = Math.min(Math.max((totalBytes / DOWNLOAD_FILE_SIZE_BYTES) * 100, 0), 100)
-        setSpeedTestProgress(progress)
+        // Update verbose status message
+        const progressPercent = Math.min(Math.max((totalBytes / DOWNLOAD_FILE_SIZE_BYTES) * 100, 0), 100)
+        const mbDownloaded = (totalBytes / (1024 * 1024)).toFixed(1)
+        const mbTotal = (DOWNLOAD_FILE_SIZE_BYTES / (1024 * 1024)).toFixed(0)
+        
+        // Set verbose status based on test phase
+        if (elapsedTime < 1) {
+          setStatusText("INITIALIZING SPEED TEST...")
+        } else if (progressPercent < 10) {
+          setStatusText(`ESTABLISHING CONNECTIONS... ${progressPercent.toFixed(0)}%`)
+        } else if (progressPercent < 90) {
+          setStatusText(`DOWNLOADING ${mbDownloaded}MB/${mbTotal}MB AT ${currentSpeed.toFixed(1)} MBPS`)
+        } else {
+          setStatusText(`FINALIZING TEST... ${currentSpeed.toFixed(1)} MBPS`)
+        }
 
         // Update graph data
         if (currentTime - lastGraphUpdateTime >= GRAPH_SAMPLE_INTERVAL_MS) {
@@ -169,11 +181,6 @@ export default function InternetChecker() {
             return updated
           })
           lastGraphUpdateTime = currentTime
-        }
-
-        // Update text less frequently to reduce blinking
-        if (Math.floor(currentTime / 500) !== Math.floor((currentTime - 16) / 500)) {
-          typeText(`${currentSpeed.toFixed(1)} MBPS`)
         }
       }
 
@@ -245,14 +252,11 @@ export default function InternetChecker() {
       const finalTime = (performance.now() - overallStartTime) / 1000
       const finalSpeed = (totalBytes * 8) / finalTime / (1024 * 1024)
       
-      // Ensure progress reaches exactly 100%
-      setSpeedTestProgress(100)
-      
       console.log(`Speed test completed: ${finalSpeed.toFixed(2)} MBPS, ${totalBytes} bytes in ${finalTime.toFixed(2)} seconds`)
       setDownloadSpeed(finalSpeed)
       setTotalBytesDownloaded(totalBytes)
       logConnection(currentIP, "speed", undefined, finalSpeed)
-      typeText(`${finalSpeed.toFixed(1)} MBPS FINAL`)
+      setStatusText(`TEST COMPLETE: ${finalSpeed.toFixed(1)} MBPS AVERAGE`)
       
       // Final graph update
       const finalSample = { time: finalTime, speed: finalSpeed }
@@ -265,9 +269,10 @@ export default function InternetChecker() {
     } catch (error) {
       if (error.name !== "AbortError") {
         console.error("Speed test failed:", error)
-        typeText("TEST FAILED")
+        setStatusText("SPEED TEST FAILED - CHECK CONNECTION")
       } else {
         console.log("Speed test was aborted")
+        setStatusText("SPEED TEST ABORTED")
       }
       clearTimeout(testTimeoutId)
     } finally {
@@ -288,7 +293,7 @@ export default function InternetChecker() {
     const container = speedGraphRef.current
     const containerWidth = container.clientWidth
     const containerHeight = 200
-    const margin = { top: 20, right: 30, bottom: 40, left: 60 }
+    const margin = { top: 20, right: 30, bottom: 50, left: 60 }
     const width = containerWidth - margin.left - margin.right
     const height = containerHeight - margin.top - margin.bottom
 
@@ -311,7 +316,7 @@ export default function InternetChecker() {
     svg.append("text")
       .attr("class", "axis-label")
       .attr("x", width / 2)
-      .attr("y", height + margin.bottom - 5)
+      .attr("y", height + margin.bottom - 10)
       .attr("text-anchor", "middle")
       .style("fill", "#00ff41")
       .style("font-family", "Courier New, Monaco, Lucida Console, monospace")
@@ -351,7 +356,7 @@ export default function InternetChecker() {
     const container = speedGraphRef.current
     const containerWidth = container.clientWidth
     const containerHeight = 200
-    const margin = { top: 20, right: 30, bottom: 40, left: 60 }
+    const margin = { top: 20, right: 30, bottom: 50, left: 60 }
     const width = containerWidth - margin.left - margin.right
     const height = containerHeight - margin.top - margin.bottom
 
@@ -724,28 +729,20 @@ export default function InternetChecker() {
               </button>
             </div>
 
-            {/* Speed Test Progress */}
-            {isSpeedTesting && (
-              <div className="mb-6">
-                <div className="text-sm opacity-70 mb-2">
-                  Progress: {speedTestProgress.toFixed(1)}%
-                </div>
-                <div className="w-full bg-gray-800 border border-[#00ff41] h-2">
-                  <div 
-                    className="bg-[#00ff41] h-full transition-all duration-200"
-                    style={{ width: `${speedTestProgress}%` }}
-                  ></div>
-                </div>
-              </div>
-            )}
-
             {/* Speed Test Graph */}
             {(isSpeedTesting || speedTestSamples.length > 0) && (
               <div className="mb-6">
-                <div className="text-lg mb-4">Speed Test Graph:</div>
+                <div className="text-lg mb-4">
+                  {isSpeedTesting && downloadSpeed !== null 
+                    ? `Current Speed: ${downloadSpeed.toFixed(1)} MBPS`
+                    : downloadSpeed !== null 
+                      ? `Final Speed: ${downloadSpeed.toFixed(1)} MBPS`
+                      : "Speed Test Graph"
+                  }
+                </div>
                 <div 
                   ref={speedGraphRef}
-                  className="w-full h-52 bg-black border border-[#00cc00] p-4"
+                  className="w-full h-52 bg-black border border-[#00cc00] p-2"
                   style={{
                     backgroundImage: `
                       linear-gradient(to right, rgba(0, 255, 0, 0.05) 1px, transparent 1px),
@@ -799,15 +796,4 @@ export default function InternetChecker() {
             )}
 
             {/* Settings at Bottom */}
-            <div className="mt-8 pt-4 border-t border-gray-600 border-opacity-30 space-y-3">
-              <label className="flex items-center text-sm cursor-pointer">
-                <input type="checkbox" checked={animationEnabled} onChange={toggleAnimation} className="w-4 h-4 mr-3" />
-                <span>Enable VT100 graphics subsystem</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
+            <div className="

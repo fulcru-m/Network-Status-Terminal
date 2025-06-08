@@ -825,11 +825,11 @@ export default function InternetChecker() {
                       <div key={index} className={`flex px-3 py-2 text-xs sm:text-sm ${getLogStatusColor(log)} hover:bg-black/30 transition-colors border-b border-[#333]/20 last:border-b-0`}>
                         <div className="w-20 sm:w-24 font-semibold">{getLogStatusDisplay(log)}</div>
                         <div className="w-24 sm:w-32 truncate" title={log.ip}>
-                          <span className="sm:hidden">{log.ip.split('.').slice(-2).join('.')}</span>
+                          <span className="sm:hidden">{log.ip.length > 15 ? `...${log.ip.slice(-12)}` : log.ip}</span>
                           <span className="hidden sm:inline">{log.ip}</span>
                         </div>
                         <div className="flex-1 truncate text-xs sm:text-sm" title={formatDateTime(log.timestamp)}>
-                          <span className="sm:hidden">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="sm:hidden">{new Date(log.timestamp).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           <span className="hidden sm:inline">{formatDateTime(log.timestamp)}</span>
                         </div>
                       </div>

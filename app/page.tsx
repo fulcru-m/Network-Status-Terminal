@@ -796,4 +796,14 @@ export default function InternetChecker() {
             )}
 
             {/* Settings at Bottom */}
-            <div className="
+            <div className="mt-8 text-center">
+              <button onClick={toggleAnimation} className="terminal-button">
+                {animationEnabled ? "DISABLE MATRIX EFFECT" : "ENABLE MATRIX EFFECT"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

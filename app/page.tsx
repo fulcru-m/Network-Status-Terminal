@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import { RefreshCw, Clock, Globe, Zap, Activity } from "lucide-react"
-import * as d3 from "d3"
 
 interface ConnectionLog {
   ip: string
@@ -34,21 +33,10 @@ export default function InternetChecker() {
   const [speedTestProgress, setSpeedTestProgress] = useState(0)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const speedGraphRef = useRef<HTMLDivElement>(null)
-
-  // Speed test variables
   const [speedTestSamples, setSpeedTestSamples] = useState<SpeedTestSample[]>([])
   const [totalBytesDownloaded, setTotalBytesDownloaded] = useState(0)
   const abortControllerRef = useRef<AbortController | null>(null)
   const animationFrameRef = useRef<number | null>(null)
-  
-  // D3 refs for direct DOM manipulation
-  const svgRef = useRef<d3.Selection<SVGSVGElement, unknown, null, undefined> | null>(null)
-  const gRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null)
-  const linePathRef = useRef<d3.Selection<SVGPathElement, unknown, null, undefined> | null>(null)
-  const xAxisGRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null)
-  const yAxisGRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null)
-  const xScaleRef = useRef<d3.ScaleLinear<number, number> | null>(null)
-  const yScaleRef = useRef<d3.ScaleLinear<number, number> | null>(null)
 
   // Speed test parameters
   const DOWNLOAD_FILE_SIZE_BYTES = 1000 * 1024 * 1024 // 1000 MB for faster testing
@@ -131,15 +119,10 @@ export default function InternetChecker() {
     setSpeedTestProgress(0)
     setSpeedTestSamples([])
     
-    // Use a ref to track bytes downloaded for immediate updates
     let totalBytes = 0
     setTotalBytesDownloaded(0)
 
-    // Initialize graph
-    initializeSpeedGraph()
-
     const overallStartTime = performance.now()
-    let lastGraphUpdateTime = overallStartTime
 
     // Setup abort controller
     abortControllerRef.current = new AbortController()
@@ -181,16 +164,8 @@ export default function InternetChecker() {
         }
 
         // Update graph data
-        if (currentTime - lastGraphUpdateTime >= GRAPH_SAMPLE_INTERVAL_MS) {
-          const newSample = { time: elapsedTime, speed: currentSpeed }
-          setSpeedTestSamples(prev => {
-            const updated = [...prev, newSample]
-            // Use setTimeout to ensure state update happens before graph draw
-            setTimeout(() => drawSpeedGraph(updated, elapsedTime), 0)
-            return updated
-          })
-          lastGraphUpdateTime = currentTime
-        }
+        const newSample = { time: elapsedTime, speed: currentSpeed }
+        setSpeedTestSamples(prev => [...prev, newSample])
       }
 
       if (totalBytes < DOWNLOAD_FILE_SIZE_BYTES && !signal.aborted) {
@@ -266,14 +241,6 @@ export default function InternetChecker() {
       setTotalBytesDownloaded(totalBytes)
       logConnection(currentIP, "speed", undefined, finalSpeed)
       setStatusText(`TEST COMPLETE: ${finalSpeed.toFixed(1)} MBPS AVERAGE`)
-      
-      // Final graph update
-      const finalSample = { time: finalTime, speed: finalSpeed }
-      setSpeedTestSamples(prev => {
-        const updated = [...prev, finalSample]
-        setTimeout(() => drawSpeedGraph(updated, finalTime), 0)
-        return updated
-      })
 
     } catch (error) {
       if (error.name !== "AbortError") {
@@ -293,179 +260,136 @@ export default function InternetChecker() {
     }
   }
 
-  const initializeSpeedGraph = useCallback(() => {
-    if (!speedGraphRef.current) return
+  // Simple canvas-based graph drawing
+  const drawSpeedGraph = useCallback((data: SpeedTestSample[]) => {
+    if (!speedGraphRef.current || data.length === 0) return
 
-    // Clear existing graph
-    d3.select(speedGraphRef.current).select("svg").remove()
+    const canvas = speedGraphRef.current.querySelector('canvas') as HTMLCanvasElement
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const rect = canvas.getBoundingClientRect()
+    const width = rect.width
+    const height = rect.height
     
-    // Reset refs
-    svgRef.current = null
-    gRef.current = null
-    linePathRef.current = null
-    xAxisGRef.current = null
-    yAxisGRef.current = null
-    xScaleRef.current = null
-    yScaleRef.current = null
-
-    const container = speedGraphRef.current
-    const containerWidth = container.clientWidth
-    const containerHeight = 200
-    const margin = { top: 20, right: 30, bottom: 50, left: 60 }
-    const width = containerWidth - margin.left - margin.right
-    const height = containerHeight - margin.top - margin.bottom
-
-    // Initialize scales
-    xScaleRef.current = d3.scaleLinear()
-      .domain([0, 1])
-      .range([0, width])
-
-    yScaleRef.current = d3.scaleLinear()
-      .domain([0, 1])
-      .range([height, 0])
-
-    svgRef.current = d3.select(container)
-      .append("svg")
-      .attr("width", containerWidth)
-      .attr("height", containerHeight)
-
-    gRef.current = svgRef.current
-      .append("g")
-      .attr("transform", `translate(${margin.left},${margin.top})`)
-
-    // Add axes groups
-    xAxisGRef.current = gRef.current.append("g")
-      .attr("class", "x-axis")
-      .attr("transform", `translate(0,${height})`)
-
-    yAxisGRef.current = gRef.current.append("g")
-      .attr("class", "y-axis")
-
-    // Add axis labels
-    gRef.current.append("text")
-      .attr("class", "axis-label")
-      .attr("x", width / 2)
-      .attr("y", height + margin.bottom - 10)
-      .attr("text-anchor", "middle")
-      .style("fill", "#00ff41")
-      .style("font-family", "Courier New, Monaco, Lucida Console, monospace")
-      .style("font-size", "12px")
-      .text("TIME (SECONDS)")
-
-    gRef.current.append("text")
-      .attr("class", "axis-label")
-      .attr("transform", "rotate(-90)")
-      .attr("y", -margin.left + 15)
-      .attr("x", -height / 2)
-      .attr("text-anchor", "middle")
-      .style("fill", "#00ff41")
-      .style("font-family", "Courier New, Monaco, Lucida Console, monospace")
-      .style("font-size", "12px")
-      .text("SPEED (MBPS)")
-
-    // Add line path
-    linePathRef.current = gRef.current.append("path")
-      .attr("class", "speed-line")
-      .style("fill", "none")
-      .style("stroke", "#00ff41")
-      .style("stroke-width", "2px")
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height)
+    
+    // Set up margins
+    const margin = { top: 20, right: 30, bottom: 40, left: 60 }
+    const graphWidth = width - margin.left - margin.right
+    const graphHeight = height - margin.top - margin.bottom
+    
+    if (data.length < 2) return
+    
+    // Calculate scales
+    const maxTime = Math.max(...data.map(d => d.time))
+    const maxSpeed = Math.max(...data.map(d => d.speed))
+    
+    // Draw grid
+    ctx.strokeStyle = 'rgba(0, 255, 65, 0.1)'
+    ctx.lineWidth = 1
+    
+    // Vertical grid lines
+    for (let i = 0; i <= 5; i++) {
+      const x = margin.left + (i / 5) * graphWidth
+      ctx.beginPath()
+      ctx.moveTo(x, margin.top)
+      ctx.lineTo(x, margin.top + graphHeight)
+      ctx.stroke()
+    }
+    
+    // Horizontal grid lines
+    for (let i = 0; i <= 5; i++) {
+      const y = margin.top + (i / 5) * graphHeight
+      ctx.beginPath()
+      ctx.moveTo(margin.left, y)
+      ctx.lineTo(margin.left + graphWidth, y)
+      ctx.stroke()
+    }
+    
+    // Draw axes
+    ctx.strokeStyle = '#00ff41'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    // X axis
+    ctx.moveTo(margin.left, margin.top + graphHeight)
+    ctx.lineTo(margin.left + graphWidth, margin.top + graphHeight)
+    // Y axis
+    ctx.moveTo(margin.left, margin.top)
+    ctx.lineTo(margin.left, margin.top + graphHeight)
+    ctx.stroke()
+    
+    // Draw labels
+    ctx.fillStyle = '#00ff41'
+    ctx.font = '12px "Courier New", Monaco, "Lucida Console", monospace'
+    ctx.textAlign = 'center'
+    ctx.fillText('TIME (SECONDS)', margin.left + graphWidth / 2, height - 10)
+    
+    ctx.save()
+    ctx.translate(15, margin.top + graphHeight / 2)
+    ctx.rotate(-Math.PI / 2)
+    ctx.fillText('SPEED (MBPS)', 0, 0)
+    ctx.restore()
+    
+    // Draw speed line
+    ctx.strokeStyle = '#00ff41'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    
+    data.forEach((point, index) => {
+      const x = margin.left + (point.time / maxTime) * graphWidth
+      const y = margin.top + graphHeight - (point.speed / (maxSpeed * 1.1)) * graphHeight
+      
+      if (index === 0) {
+        ctx.moveTo(x, y)
+      } else {
+        ctx.lineTo(x, y)
+      }
+    })
+    
+    ctx.stroke()
+    
+    // Draw data points
+    ctx.fillStyle = '#00ff41'
+    data.forEach(point => {
+      const x = margin.left + (point.time / maxTime) * graphWidth
+      const y = margin.top + graphHeight - (point.speed / (maxSpeed * 1.1)) * graphHeight
+      
+      ctx.beginPath()
+      ctx.arc(x, y, 3, 0, 2 * Math.PI)
+      ctx.fill()
+    })
+    
+    // Draw axis labels
+    ctx.fillStyle = '#00cc00'
+    ctx.font = '10px "Courier New", Monaco, "Lucida Console", monospace'
+    ctx.textAlign = 'center'
+    
+    // X-axis labels
+    for (let i = 0; i <= 5; i++) {
+      const x = margin.left + (i / 5) * graphWidth
+      const time = (i / 5) * maxTime
+      ctx.fillText(`${time.toFixed(1)}s`, x, margin.top + graphHeight + 20)
+    }
+    
+    // Y-axis labels
+    ctx.textAlign = 'right'
+    for (let i = 0; i <= 5; i++) {
+      const y = margin.top + graphHeight - (i / 5) * graphHeight
+      const speed = (i / 5) * maxSpeed * 1.1
+      ctx.fillText(`${speed.toFixed(0)}`, margin.left - 10, y + 4)
+    }
   }, [])
 
-  const drawSpeedGraph = useCallback((data: SpeedTestSample[], maxTime: number) => {
-    if (!speedGraphRef.current || data.length === 0 || !gRef.current || !linePathRef.current) {
-      console.log("Cannot draw graph: no container or no data", { 
-        hasContainer: !!speedGraphRef.current, 
-        dataLength: data.length,
-        hasGRef: !!gRef.current,
-        hasLineRef: !!linePathRef.current
-      })
-      return
+  // Update graph when samples change
+  useEffect(() => {
+    if (speedTestSamples.length > 0) {
+      drawSpeedGraph(speedTestSamples)
     }
-
-    console.log("Drawing graph with", data.length, "data points")
-
-    const container = speedGraphRef.current
-    const containerWidth = container.clientWidth
-    const containerHeight = 200
-    const margin = { top: 20, right: 30, bottom: 50, left: 60 }
-    const width = containerWidth - margin.left - margin.right
-    const height = containerHeight - margin.top - margin.bottom
-
-    // Update scales
-    if (xScaleRef.current) {
-      xScaleRef.current.domain([0, maxTime * 1.05])
-    }
-
-    const maxSpeed = d3.max(data, d => d.speed) || 0
-    if (yScaleRef.current) {
-      yScaleRef.current.domain([0, Math.max(maxSpeed * 1.2, 1)])
-    }
-
-    console.log("Graph scales:", { 
-      xDomain: [0, maxTime * 1.05], 
-      yDomain: [0, maxSpeed * 1.2],
-      dataPoints: data.length
-    })
-
-    // Update axes
-    const xAxis = d3.axisBottom(xScaleRef.current!)
-      .ticks(5)
-      .tickFormat(d => `${d.toFixed(1)}s`)
-
-    const yAxis = d3.axisLeft(yScaleRef.current!)
-      .ticks(5)
-      .tickFormat(d => `${d.toFixed(0)}`)
-
-    if (xAxisGRef.current) {
-      xAxisGRef.current
-      .transition()
-      .duration(GRAPH_SAMPLE_INTERVAL_MS * 0.8)
-      .ease(d3.easeLinear)
-      .call(xAxis)
-      .selectAll("text")
-      .style("fill", "#00cc00")
-      .style("font-family", "Courier New, Monaco, Lucida Console, monospace")
-      .style("font-size", "10px")
-
-      // Style axis lines
-      xAxisGRef.current
-      .selectAll("path, line")
-      .style("stroke", "#006600")
-    }
-
-    if (yAxisGRef.current) {
-      yAxisGRef.current
-      .transition()
-      .duration(GRAPH_SAMPLE_INTERVAL_MS * 0.8)
-      .ease(d3.easeLinear)
-      .call(yAxis)
-      .selectAll("text")
-      .style("fill", "#00cc00")
-      .style("font-family", "Courier New, Monaco, Lucida Console, monospace")
-      .style("font-size", "10px")
-
-      yAxisGRef.current
-      .selectAll("path, line")
-      .style("stroke", "#006600")
-    }
-
-    // Update line
-    const line = d3.line<SpeedTestSample>()
-      .x(d => xScaleRef.current!(d.time))
-      .y(d => yScaleRef.current!(d.speed))
-      .curve(d3.curveMonotoneX) // Smooth curve
-
-    if (linePathRef.current) {
-      linePathRef.current
-        .datum(data)
-        .transition()
-        .duration(GRAPH_SAMPLE_INTERVAL_MS * 0.8)
-        .ease(d3.easeLinear)
-        .attr("d", line)
-    }
-
-    console.log("Graph updated successfully")
-  }, [GRAPH_SAMPLE_INTERVAL_MS])
+  }, [speedTestSamples, drawSpeedGraph])
 
   const typeText = (text: string) => {
     // For speed test, update immediately to avoid fast blinking
@@ -746,19 +670,13 @@ export default function InternetChecker() {
                 <div 
                   ref={speedGraphRef}
                   className="w-full h-52 bg-black border border-[#00cc00] p-2"
-                  style={{
-                    backgroundImage: `
-                      linear-gradient(to right, rgba(0, 255, 0, 0.05) 1px, transparent 1px),
-                      linear-gradient(to bottom, rgba(0, 255, 0, 0.05) 1px, transparent 1px)
-                    `,
-                    backgroundSize: '20px 20px'
-                  }}
                 >
-                  {speedTestSamples.length === 0 && !isSpeedTesting && (
-                    <div className="flex items-center justify-center h-full text-[#00ff41] opacity-70">
-                      NO DATA TO DISPLAY
-                    </div>
-                  )}
+                  <canvas 
+                    width={800} 
+                    height={200} 
+                    className="w-full h-full"
+                    style={{ imageRendering: 'pixelated' }}
+                  />
                 </div>
               </div>
             )}

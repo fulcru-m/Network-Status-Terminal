@@ -736,7 +736,7 @@ export default function InternetChecker() {
                   {isSpeedTesting && downloadSpeed !== null 
                     ? `Current Speed: ${downloadSpeed.toFixed(1)} MBPS`
                     : downloadSpeed !== null 
-                      ? `Final Speed: ${downloadSpeed.toFixed(1)} MBPS`
+                      ? `Throughput: ${downloadSpeed.toFixed(1)} MBPS`
                       : "Speed Test Graph"
                   }
                 </div>

@@ -121,6 +121,9 @@ export default function InternetChecker() {
     setDownloadSpeed(null)
     setSpeedTestProgress(0)
     setSpeedTestSamples([])
+    
+    // Use a ref to track bytes downloaded for immediate updates
+    let totalBytes = 0
     setTotalBytesDownloaded(0)
 
     // Initialize graph
@@ -148,10 +151,11 @@ export default function InternetChecker() {
       const elapsedTime = (currentTime - overallStartTime) / 1000
 
       if (elapsedTime > 0) {
-        const currentSpeed = (totalBytesDownloaded * 8) / elapsedTime / (1024 * 1024)
+        const currentSpeed = (totalBytes * 8) / elapsedTime / (1024 * 1024)
         setDownloadSpeed(currentSpeed)
+        setTotalBytesDownloaded(totalBytes)
         
-        const progress = Math.min((totalBytesDownloaded / DOWNLOAD_FILE_SIZE_BYTES) * 100, 100)
+        const progress = Math.min((totalBytes / DOWNLOAD_FILE_SIZE_BYTES) * 100, 100)
         setSpeedTestProgress(progress)
 
         // Update graph data
@@ -168,7 +172,7 @@ export default function InternetChecker() {
         typeText(`${currentSpeed.toFixed(2)} MBPS`)
       }
 
-      if (totalBytesDownloaded < DOWNLOAD_FILE_SIZE_BYTES && !signal.aborted) {
+      if (totalBytes < DOWNLOAD_FILE_SIZE_BYTES && !signal.aborted) {
         animationFrameRef.current = requestAnimationFrame(updateUI)
       } else {
         if (animationFrameRef.current) {
@@ -216,7 +220,7 @@ export default function InternetChecker() {
                 if (done) break
 
                 connectionBytesDownloaded += value.length
-                setTotalBytesDownloaded(prev => prev + value.length)
+                totalBytes += value.length
               }
               console.log(`Connection ${i + 1} completed, downloaded ${connectionBytesDownloaded} bytes`)
             } catch (error) {
@@ -234,10 +238,11 @@ export default function InternetChecker() {
       clearTimeout(testTimeoutId)
 
       const finalTime = (performance.now() - overallStartTime) / 1000
-      const finalSpeed = (totalBytesDownloaded * 8) / finalTime / (1024 * 1024)
+      const finalSpeed = (totalBytes * 8) / finalTime / (1024 * 1024)
       
-      console.log(`Speed test completed: ${finalSpeed.toFixed(2)} MBPS, ${totalBytesDownloaded} bytes in ${finalTime.toFixed(2)} seconds`)
+      console.log(`Speed test completed: ${finalSpeed.toFixed(2)} MBPS, ${totalBytes} bytes in ${finalTime.toFixed(2)} seconds`)
       setDownloadSpeed(finalSpeed)
+      setTotalBytesDownloaded(totalBytes)
       logConnection(currentIP, "speed", undefined, finalSpeed)
       typeText(`${finalSpeed.toFixed(2)} MBPS`)
 

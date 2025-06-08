@@ -307,6 +307,15 @@ export default function InternetChecker() {
     }
   }
 
+  // Get speed color for graph line based on average speed
+  const getSpeedLineColor = (avgSpeed: number) => {
+    if (avgSpeed >= 50) return "#00ff41"  // Green
+    if (avgSpeed >= 25) return "#ffff00"  // Yellow
+    if (avgSpeed >= 10) return "#ffff00"  // Yellow
+    if (avgSpeed >= 3) return "#ff8800"   // Orange
+    return "#ff0000"  // Red
+  }
+
   // Simple canvas-based graph drawing
   const drawSpeedGraph = useCallback((data: SpeedTestSample[]) => {
     if (!speedGraphRef.current || data.length === 0) return
@@ -350,6 +359,7 @@ export default function InternetChecker() {
     // Calculate scales
     const maxTime = Math.max(...data.map(d => d.time))
     const maxSpeed = Math.max(...data.map(d => d.speed))
+    const avgSpeed = data.reduce((sum, d) => sum + d.speed, 0) / data.length
     
     // Draw grid
     ctx.strokeStyle = 'rgba(0, 255, 65, 0.1)'
@@ -397,8 +407,9 @@ export default function InternetChecker() {
     ctx.fillText('SPEED (MBPS)', 0, 0)
     ctx.restore()
     
-    // Draw speed line
-    ctx.strokeStyle = '#00ff41'
+    // Draw speed line with color based on average speed
+    const lineColor = getSpeedLineColor(avgSpeed)
+    ctx.strokeStyle = lineColor
     ctx.lineWidth = isMobile ? 3 : 4
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
@@ -469,7 +480,7 @@ export default function InternetChecker() {
     }
     
     // Add glow effect
-    ctx.shadowColor = '#00ff41'
+    ctx.shadowColor = lineColor
     ctx.shadowBlur = 8
     ctx.stroke()
     ctx.shadowBlur = 0
@@ -672,12 +683,11 @@ export default function InternetChecker() {
       return "text-red-500"
     }
     if (currentStatusType === "speed" && downloadSpeed !== null) {
-      // Speed tests should show green for good speeds
-      if (downloadSpeed > 25) return "text-[#00ff41]"  // Excellent speed
-      if (downloadSpeed > 10) return "text-[#00ff41]"  // Good speed
-      if (downloadSpeed > 5) return "text-[#00ff41]"   // Decent speed
-      if (downloadSpeed > 1) return "text-orange-400"  // Slow speed
-      return "text-red-500"  // Very slow speed
+      if (downloadSpeed >= 50) return "text-[#00ff41]"  // 50+ Mbps - Green
+      if (downloadSpeed >= 25) return "text-yellow-400" // 25-50 Mbps - Yellow
+      if (downloadSpeed >= 10) return "text-yellow-400" // 10-25 Mbps - Yellow
+      if (downloadSpeed >= 3) return "text-orange-400"  // 3-10 Mbps - Orange
+      return "text-red-500"  // <3 Mbps - Red
     }
     return isOnline ? "text-[#00ff41]" : "text-red-500"
   }
@@ -704,12 +714,11 @@ export default function InternetChecker() {
     }
     if (log.status === "speed") {
       if (!log.downloadSpeed) return "text-red-500"
-      // Speed test logs should show green for good speeds
-      if (log.downloadSpeed > 25) return "text-[#00ff41]"  // Excellent speed
-      if (log.downloadSpeed > 10) return "text-[#00ff41]"  // Good speed  
-      if (log.downloadSpeed > 5) return "text-[#00ff41]"   // Decent speed
-      if (log.downloadSpeed > 1) return "text-orange-400"  // Slow speed
-      return "text-red-500"  // Very slow speed
+      if (log.downloadSpeed >= 50) return "text-[#00ff41]"  // 50+ Mbps - Green
+      if (log.downloadSpeed >= 25) return "text-yellow-400" // 25-50 Mbps - Yellow
+      if (log.downloadSpeed >= 10) return "text-yellow-400" // 10-25 Mbps - Yellow
+      if (log.downloadSpeed >= 3) return "text-orange-400"  // 3-10 Mbps - Orange
+      return "text-red-500"  // <3 Mbps - Red
     }
     return log.status === "online" ? "text-[#00ff41]" : "text-red-500"
   }

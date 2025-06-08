@@ -672,12 +672,12 @@ export default function InternetChecker() {
       return "text-red-500"
     }
     if (currentStatusType === "speed" && downloadSpeed !== null) {
-      if (downloadSpeed > 100) return "text-[#00ff41]"
-      if (downloadSpeed > 50) return "text-orange-300"
-      if (downloadSpeed > 25) return "text-orange-400"
-      if (downloadSpeed > 10) return "text-orange-500"
-      if (downloadSpeed > 1) return "text-red-400"
-      return "text-red-500"
+      // Speed tests should show green for good speeds
+      if (downloadSpeed > 25) return "text-[#00ff41]"  // Excellent speed
+      if (downloadSpeed > 10) return "text-[#00ff41]"  // Good speed
+      if (downloadSpeed > 5) return "text-[#00ff41]"   // Decent speed
+      if (downloadSpeed > 1) return "text-orange-400"  // Slow speed
+      return "text-red-500"  // Very slow speed
     }
     return isOnline ? "text-[#00ff41]" : "text-red-500"
   }
@@ -704,12 +704,12 @@ export default function InternetChecker() {
     }
     if (log.status === "speed") {
       if (!log.downloadSpeed) return "text-red-500"
-      if (log.downloadSpeed > 100) return "text-[#00ff41]"
-      if (log.downloadSpeed > 50) return "text-orange-300"
-      if (log.downloadSpeed > 25) return "text-orange-400"
-      if (log.downloadSpeed > 10) return "text-orange-500"
-      if (log.downloadSpeed > 1) return "text-red-400"
-      return "text-red-500"
+      // Speed test logs should show green for good speeds
+      if (log.downloadSpeed > 25) return "text-[#00ff41]"  // Excellent speed
+      if (log.downloadSpeed > 10) return "text-[#00ff41]"  // Good speed  
+      if (log.downloadSpeed > 5) return "text-[#00ff41]"   // Decent speed
+      if (log.downloadSpeed > 1) return "text-orange-400"  // Slow speed
+      return "text-red-500"  // Very slow speed
     }
     return log.status === "online" ? "text-[#00ff41]" : "text-red-500"
   }

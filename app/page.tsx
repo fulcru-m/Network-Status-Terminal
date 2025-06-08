@@ -1,5 +1,6 @@
 "use client"
 
+import { Suspense } from "react"
 import { useState, useEffect, useRef } from "react"
 import { RefreshCw, Clock, Globe, Zap } from "lucide-react"
 
@@ -10,7 +11,7 @@ interface ConnectionLog {
   pingTime?: number
 }
 
-export default function InternetChecker() {
+function InternetCheckerContent() {
   const [isOnline, setIsOnline] = useState<boolean | null>(null)
   const [isChecking, setIsChecking] = useState(false)
   const [isPinging, setIsPinging] = useState(false)
@@ -390,5 +391,29 @@ export default function InternetChecker() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function InternetChecker() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="w-full max-w-2xl z-10">
+          <div className="terminal-container">
+            <div className="terminal-header">
+              <span>NETWORK STATUS TERMINAL</span>
+            </div>
+            <div className="terminal-content p-6">
+              <div className="text-center">
+                <div className="text-lg mb-2">Loading...</div>
+                <div className="text-sm opacity-70">Please wait</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    }>
+      <InternetCheckerContent />
+    </Suspense>
   )
 }

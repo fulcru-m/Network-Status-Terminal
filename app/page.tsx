@@ -1,35 +1,58 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { RefreshCw, Clock, Globe, Zap } from "lucide-react"
+import { RefreshCw, Clock, Globe, Zap, Activity } from "lucide-react"
+import * as d3 from "d3"
 
 interface ConnectionLog {
   ip: string
   timestamp: string
-  status: "online" | "offline" | "ping"
+  status: "online" | "offline" | "ping" | "speed"
   pingTime?: number
+  downloadSpeed?: number
+}
+
+interface SpeedTestSample {
+  time: number
+  speed: number
 }
 
 export default function InternetChecker() {
   const [isOnline, setIsOnline] = useState<boolean | null>(null)
   const [isChecking, setIsChecking] = useState(false)
   const [isPinging, setIsPinging] = useState(false)
+  const [isSpeedTesting, setIsSpeedTesting] = useState(false)
   const [currentIP, setCurrentIP] = useState<string>("")
   const [pingTime, setPingTime] = useState<number | null>(null)
+  const [downloadSpeed, setDownloadSpeed] = useState<number | null>(null)
   const [connectionLogs, setConnectionLogs] = useState<ConnectionLog[]>([])
   const [lastChecked, setLastChecked] = useState<string>("")
   const [animationEnabled, setAnimationEnabled] = useState(true)
   const [statusText, setStatusText] = useState("")
   const [showCursor, setShowCursor] = useState(true)
-  const [currentStatusType, setCurrentStatusType] = useState<"connection" | "ping">("connection")
+  const [currentStatusType, setCurrentStatusType] = useState<"connection" | "ping" | "speed">("connection")
+  const [speedTestProgress, setSpeedTestProgress] = useState(0)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const speedGraphRef = useRef<HTMLDivElement>(null)
+
+  // Speed test variables
+  const [speedTestSamples, setSpeedTestSamples] = useState<SpeedTestSample[]>([])
+  const [totalBytesDownloaded, setTotalBytesDownloaded] = useState(0)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const animationFrameRef = useRef<number | null>(null)
+
+  // Speed test parameters
+  const DOWNLOAD_FILE_SIZE_BYTES = 100 * 1024 * 1024 // 100 MB for faster testing
+  const DOWNLOAD_TEST_URL_BASE = "https://speed.cloudflare.com/__down"
+  const NUM_PARALLEL_CONNECTIONS = 6
+  const GRAPH_SAMPLE_INTERVAL_MS = 200
+  const TEST_TIMEOUT_SECONDS = 15
 
   const checkConnection = async () => {
     setIsChecking(true)
     setCurrentStatusType("connection")
 
     try {
-      // Get IP directly from client-side (your device)
       const ipResponse = await fetch("https://api.ipify.org?format=json", {
         cache: "no-cache",
       })
@@ -61,8 +84,6 @@ export default function InternetChecker() {
 
     try {
       const startTime = performance.now()
-
-      // Use Cloudflare's speed test endpoint which automatically routes to nearest location
       const endpoint = "https://speed.cloudflare.com/__down?bytes=1"
 
       const response = await fetch(endpoint, {
@@ -89,6 +110,262 @@ export default function InternetChecker() {
     setIsPinging(false)
   }
 
+  const runSpeedTest = async () => {
+    if (!isOnline) {
+      typeText("NO CONNECTION")
+      return
+    }
+
+    setIsSpeedTesting(true)
+    setCurrentStatusType("speed")
+    setDownloadSpeed(null)
+    setSpeedTestProgress(0)
+    setSpeedTestSamples([])
+    setTotalBytesDownloaded(0)
+
+    // Initialize graph
+    initializeSpeedGraph()
+
+    const overallStartTime = performance.now()
+    let lastGraphUpdateTime = overallStartTime
+
+    // Setup abort controller
+    abortControllerRef.current = new AbortController()
+    const signal = abortControllerRef.current.signal
+
+    // Test timeout
+    const testTimeoutId = setTimeout(() => {
+      if (!signal.aborted) {
+        abortControllerRef.current?.abort()
+        typeText("TEST TIMEOUT")
+      }
+    }, TEST_TIMEOUT_SECONDS * 1000)
+
+    // UI update function
+    const updateUI = () => {
+      const currentTime = performance.now()
+      const elapsedTime = (currentTime - overallStartTime) / 1000
+
+      if (elapsedTime > 0) {
+        const currentSpeed = (totalBytesDownloaded * 8) / elapsedTime / (1024 * 1024)
+        setDownloadSpeed(currentSpeed)
+        
+        const progress = Math.min((totalBytesDownloaded / DOWNLOAD_FILE_SIZE_BYTES) * 100, 100)
+        setSpeedTestProgress(progress)
+
+        // Update graph data
+        if (currentTime - lastGraphUpdateTime >= GRAPH_SAMPLE_INTERVAL_MS) {
+          const newSample = { time: elapsedTime, speed: currentSpeed }
+          setSpeedTestSamples(prev => {
+            const updated = [...prev, newSample]
+            drawSpeedGraph(updated, elapsedTime)
+            return updated
+          })
+          lastGraphUpdateTime = currentTime
+        }
+
+        typeText(`${currentSpeed.toFixed(2)} MBPS`)
+      }
+
+      if (totalBytesDownloaded < DOWNLOAD_FILE_SIZE_BYTES && !signal.aborted) {
+        animationFrameRef.current = requestAnimationFrame(updateUI)
+      } else {
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current)
+          animationFrameRef.current = null
+        }
+        if (!signal.aborted) {
+          clearTimeout(testTimeoutId)
+        }
+      }
+    }
+
+    // Start UI updates
+    animationFrameRef.current = requestAnimationFrame(updateUI)
+
+    try {
+      const downloadPromises = []
+      const bytesPerConnection = Math.floor(DOWNLOAD_FILE_SIZE_BYTES / NUM_PARALLEL_CONNECTIONS)
+      let remainingBytes = DOWNLOAD_FILE_SIZE_BYTES % NUM_PARALLEL_CONNECTIONS
+
+      for (let i = 0; i < NUM_PARALLEL_CONNECTIONS; i++) {
+        const currentConnectionBytes = bytesPerConnection + (remainingBytes-- > 0 ? 1 : 0)
+        const url = `${DOWNLOAD_TEST_URL_BASE}?bytes=${currentConnectionBytes}&_t=${Date.now()}_${i}`
+
+        downloadPromises.push(
+          (async () => {
+            try {
+              const response = await fetch(url, { cache: "no-store", signal })
+              if (!response.ok) {
+                throw new Error(`HTTP Error: ${response.status}`)
+              }
+
+              const reader = response.body?.getReader()
+              if (!reader) throw new Error("No reader available")
+
+              while (true) {
+                if (signal.aborted) {
+                  reader.cancel()
+                  break
+                }
+                const { done, value } = await reader.read()
+                if (done) break
+
+                setTotalBytesDownloaded(prev => prev + value.length)
+              }
+            } catch (error) {
+              if (error.name !== "AbortError") {
+                console.error(`Connection ${i + 1} failed:`, error)
+                throw error
+              }
+            }
+          })()
+        )
+      }
+
+      await Promise.all(downloadPromises)
+      clearTimeout(testTimeoutId)
+
+      const finalTime = (performance.now() - overallStartTime) / 1000
+      const finalSpeed = (totalBytesDownloaded * 8) / finalTime / (1024 * 1024)
+      
+      setDownloadSpeed(finalSpeed)
+      logConnection(currentIP, "speed", undefined, finalSpeed)
+      typeText(`${finalSpeed.toFixed(2)} MBPS`)
+
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        console.error("Speed test failed:", error)
+        typeText("TEST FAILED")
+      }
+      clearTimeout(testTimeoutId)
+    } finally {
+      setIsSpeedTesting(false)
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+        animationFrameRef.current = null
+      }
+    }
+  }
+
+  const initializeSpeedGraph = () => {
+    if (!speedGraphRef.current) return
+
+    // Clear existing graph
+    d3.select(speedGraphRef.current).select("svg").remove()
+
+    const container = speedGraphRef.current
+    const containerWidth = container.clientWidth
+    const containerHeight = 200
+    const margin = { top: 20, right: 30, bottom: 40, left: 60 }
+    const width = containerWidth - margin.left - margin.right
+    const height = containerHeight - margin.top - margin.bottom
+
+    const svg = d3.select(container)
+      .append("svg")
+      .attr("width", containerWidth)
+      .attr("height", containerHeight)
+      .append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`)
+
+    // Add axes groups
+    svg.append("g")
+      .attr("class", "x-axis")
+      .attr("transform", `translate(0,${height})`)
+
+    svg.append("g")
+      .attr("class", "y-axis")
+
+    // Add axis labels
+    svg.append("text")
+      .attr("class", "axis-label")
+      .attr("x", width / 2)
+      .attr("y", height + margin.bottom - 5)
+      .attr("text-anchor", "middle")
+      .style("fill", "#00ff41")
+      .style("font-family", "Courier New, Monaco, Lucida Console, monospace")
+      .style("font-size", "12px")
+      .text("TIME (SECONDS)")
+
+    svg.append("text")
+      .attr("class", "axis-label")
+      .attr("transform", "rotate(-90)")
+      .attr("y", -margin.left + 15)
+      .attr("x", -height / 2)
+      .attr("text-anchor", "middle")
+      .style("fill", "#00ff41")
+      .style("font-family", "Courier New, Monaco, Lucida Console, monospace")
+      .style("font-size", "12px")
+      .text("SPEED (MBPS)")
+
+    // Add line path
+    svg.append("path")
+      .attr("class", "speed-line")
+      .style("fill", "none")
+      .style("stroke", "#00ff41")
+      .style("stroke-width", "2px")
+  }
+
+  const drawSpeedGraph = (data: SpeedTestSample[], maxTime: number) => {
+    if (!speedGraphRef.current || data.length === 0) return
+
+    const container = speedGraphRef.current
+    const containerWidth = container.clientWidth
+    const containerHeight = 200
+    const margin = { top: 20, right: 30, bottom: 40, left: 60 }
+    const width = containerWidth - margin.left - margin.right
+    const height = containerHeight - margin.top - margin.bottom
+
+    const svg = d3.select(container).select("svg g")
+
+    // Update scales
+    const xScale = d3.scaleLinear()
+      .domain([0, maxTime * 1.05])
+      .range([0, width])
+
+    const yScale = d3.scaleLinear()
+      .domain([0, (d3.max(data, d => d.speed) || 0) * 1.2])
+      .range([height, 0])
+
+    // Update axes
+    const xAxis = d3.axisBottom(xScale)
+      .ticks(5)
+      .tickFormat(d => `${d}s`)
+
+    const yAxis = d3.axisLeft(yScale)
+      .ticks(5)
+      .tickFormat(d => `${d} MBPS`)
+
+    svg.select(".x-axis")
+      .transition()
+      .duration(200)
+      .call(xAxis)
+      .selectAll("text")
+      .style("fill", "#00cc00")
+      .style("font-family", "Courier New, Monaco, Lucida Console, monospace")
+      .style("font-size", "10px")
+
+    svg.select(".y-axis")
+      .transition()
+      .duration(200)
+      .call(yAxis)
+      .selectAll("text")
+      .style("fill", "#00cc00")
+      .style("font-family", "Courier New, Monaco, Lucida Console, monospace")
+      .style("font-size", "10px")
+
+    // Update line
+    const line = d3.line<SpeedTestSample>()
+      .x(d => xScale(d.time))
+      .y(d => yScale(d.speed))
+
+    svg.select(".speed-line")
+      .datum(data)
+      .transition()
+      .duration(200)
+      .attr("d", line)
+  }
+
   const typeText = (text: string) => {
     setStatusText("")
     let i = 0
@@ -102,12 +379,13 @@ export default function InternetChecker() {
     }, 100)
   }
 
-  const logConnection = (ip: string, status: "online" | "offline" | "ping", pingMs?: number | null) => {
+  const logConnection = (ip: string, status: "online" | "offline" | "ping" | "speed", pingMs?: number | null, speedMbps?: number) => {
     const newLog: ConnectionLog = {
       ip,
       timestamp: new Date().toLocaleString(),
       status,
       pingTime: pingMs || undefined,
+      downloadSpeed: speedMbps || undefined,
     }
 
     setConnectionLogs((prev) => {
@@ -233,12 +511,20 @@ export default function InternetChecker() {
 
   const getStatusColor = () => {
     if (currentStatusType === "ping" && pingTime !== null) {
-      if (pingTime < 100) return "text-[#00ff41]" // Green - Excellent
-      if (pingTime < 150) return "text-orange-300" // Light orange
-      if (pingTime < 200) return "text-orange-400" // Orange
-      if (pingTime < 300) return "text-orange-500" // Darker orange
-      if (pingTime < 500) return "text-red-400" // Light red
-      return "text-red-500" // Red - Very High
+      if (pingTime < 100) return "text-[#00ff41]"
+      if (pingTime < 150) return "text-orange-300"
+      if (pingTime < 200) return "text-orange-400"
+      if (pingTime < 300) return "text-orange-500"
+      if (pingTime < 500) return "text-red-400"
+      return "text-red-500"
+    }
+    if (currentStatusType === "speed" && downloadSpeed !== null) {
+      if (downloadSpeed > 100) return "text-[#00ff41]"
+      if (downloadSpeed > 50) return "text-orange-300"
+      if (downloadSpeed > 25) return "text-orange-400"
+      if (downloadSpeed > 10) return "text-orange-500"
+      if (downloadSpeed > 1) return "text-red-400"
+      return "text-red-500"
     }
     return isOnline ? "text-[#00ff41]" : "text-red-500"
   }
@@ -247,17 +533,29 @@ export default function InternetChecker() {
     if (log.status === "ping") {
       return log.pingTime ? `${log.pingTime}ms` : "PING FAIL"
     }
+    if (log.status === "speed") {
+      return log.downloadSpeed ? `${log.downloadSpeed.toFixed(2)} MBPS` : "SPEED FAIL"
+    }
     return log.status === "online" ? "ONLINE" : "OFFLINE"
   }
 
   const getLogStatusColor = (log: ConnectionLog) => {
     if (log.status === "ping") {
       if (!log.pingTime) return "text-red-500"
-      if (log.pingTime < 100) return "text-[#00ff41]" // Green - Excellent
-      if (log.pingTime < 150) return "text-orange-300" // Light orange
-      if (log.pingTime < 200) return "text-orange-400" // Orange
-      if (log.pingTime < 300) return "text-orange-500" // Darker orange
-      if (log.pingTime < 500) return "text-red-400" // Light red
+      if (log.pingTime < 100) return "text-[#00ff41]"
+      if (log.pingTime < 150) return "text-orange-300"
+      if (log.pingTime < 200) return "text-orange-400"
+      if (log.pingTime < 300) return "text-orange-500"
+      if (log.pingTime < 500) return "text-red-400"
+      return "text-red-500"
+    }
+    if (log.status === "speed") {
+      if (!log.downloadSpeed) return "text-red-500"
+      if (log.downloadSpeed > 100) return "text-[#00ff41]"
+      if (log.downloadSpeed > 50) return "text-orange-300"
+      if (log.downloadSpeed > 25) return "text-orange-400"
+      if (log.downloadSpeed > 10) return "text-orange-500"
+      if (log.downloadSpeed > 1) return "text-red-400"
       return "text-red-500"
     }
     return log.status === "online" ? "text-[#00ff41]" : "text-red-500"
@@ -267,7 +565,7 @@ export default function InternetChecker() {
     <div className="min-h-screen flex items-center justify-center p-4">
       {animationEnabled && <canvas ref={canvasRef} className="matrix-bg"></canvas>}
 
-      <div className="w-full max-w-2xl z-10">
+      <div className="w-full max-w-4xl z-10">
         <div className="terminal-container">
           <div className="terminal-header">
             <span className="typing-effect">NETWORK STATUS TERMINAL</span>
@@ -301,7 +599,7 @@ export default function InternetChecker() {
             </div>
 
             {/* Control Buttons */}
-            <div className="flex justify-center items-center gap-4 mb-6">
+            <div className="flex justify-center items-center gap-4 mb-6 flex-wrap">
               <button onClick={checkConnection} disabled={isChecking} className="terminal-button flex-1 max-w-48">
                 {isChecking ? (
                   <>
@@ -329,7 +627,60 @@ export default function InternetChecker() {
                   </>
                 )}
               </button>
+
+              <button onClick={runSpeedTest} disabled={isSpeedTesting || !isOnline} className="terminal-button flex-1 max-w-48">
+                {isSpeedTesting ? (
+                  <>
+                    <Activity className="inline w-4 h-4 mr-2 animate-pulse" />
+                    TESTING...
+                  </>
+                ) : (
+                  <>
+                    <Activity className="inline w-4 h-4 mr-2" />
+                    SPEED TEST
+                  </>
+                )}
+              </button>
             </div>
+
+            {/* Speed Test Progress */}
+            {isSpeedTesting && (
+              <div className="mb-6">
+                <div className="text-sm opacity-70 mb-2">
+                  Progress: {speedTestProgress.toFixed(1)}%
+                </div>
+                <div className="w-full bg-gray-800 border border-[#00ff41] h-2">
+                  <div 
+                    className="bg-[#00ff41] h-full transition-all duration-200"
+                    style={{ width: `${speedTestProgress}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+
+            {/* Speed Test Graph */}
+            {(isSpeedTesting || speedTestSamples.length > 0) && (
+              <div className="mb-6">
+                <div className="text-lg mb-4">Speed Test Graph:</div>
+                <div 
+                  ref={speedGraphRef}
+                  className="w-full h-52 bg-black border border-[#00cc00] p-4"
+                  style={{
+                    backgroundImage: `
+                      linear-gradient(to right, rgba(0, 255, 0, 0.05) 1px, transparent 1px),
+                      linear-gradient(to bottom, rgba(0, 255, 0, 0.05) 1px, transparent 1px)
+                    `,
+                    backgroundSize: '20px 20px'
+                  }}
+                >
+                  {speedTestSamples.length === 0 && !isSpeedTesting && (
+                    <div className="flex items-center justify-center h-full text-[#00ff41] opacity-70">
+                      NO DATA TO DISPLAY
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Last Checked */}
             {lastChecked && (
@@ -347,7 +698,7 @@ export default function InternetChecker() {
                   <table className="w-full table-fixed">
                     <thead>
                       <tr className="opacity-70">
-                        <th className="text-left w-20">STATUS</th>
+                        <th className="text-left w-24">STATUS</th>
                         <th className="text-left w-32">IP ADDRESS</th>
                         <th className="text-left">TIMESTAMP</th>
                       </tr>
@@ -355,7 +706,7 @@ export default function InternetChecker() {
                     <tbody>
                       {connectionLogs.map((log, index) => (
                         <tr key={index} className={getLogStatusColor(log)}>
-                          <td className="w-20">{getLogStatusDisplay(log)}</td>
+                          <td className="w-24">{getLogStatusDisplay(log)}</td>
                           <td className="w-32">{log.ip}</td>
                           <td>{formatDateTime(log.timestamp)}</td>
                         </tr>

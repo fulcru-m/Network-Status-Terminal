@@ -155,7 +155,8 @@ export default function InternetChecker() {
         setDownloadSpeed(currentSpeed)
         setTotalBytesDownloaded(totalBytes)
         
-        const progress = Math.min((totalBytes / DOWNLOAD_FILE_SIZE_BYTES) * 100, 100)
+        // Fix progress calculation to properly reach 100%
+        const progress = Math.min(Math.max((totalBytes / DOWNLOAD_FILE_SIZE_BYTES) * 100, 0), 100)
         setSpeedTestProgress(progress)
 
         // Update graph data
@@ -163,13 +164,17 @@ export default function InternetChecker() {
           const newSample = { time: elapsedTime, speed: currentSpeed }
           setSpeedTestSamples(prev => {
             const updated = [...prev, newSample]
-            drawSpeedGraph(updated, elapsedTime)
+            // Use setTimeout to ensure state update happens before graph draw
+            setTimeout(() => drawSpeedGraph(updated, elapsedTime), 0)
             return updated
           })
           lastGraphUpdateTime = currentTime
         }
 
-        typeText(`${currentSpeed.toFixed(2)} MBPS`)
+        // Update text less frequently to reduce blinking
+        if (Math.floor(currentTime / 500) !== Math.floor((currentTime - 16) / 500)) {
+          typeText(`${currentSpeed.toFixed(1)} MBPS`)
+        }
       }
 
       if (totalBytes < DOWNLOAD_FILE_SIZE_BYTES && !signal.aborted) {
@@ -240,11 +245,22 @@ export default function InternetChecker() {
       const finalTime = (performance.now() - overallStartTime) / 1000
       const finalSpeed = (totalBytes * 8) / finalTime / (1024 * 1024)
       
+      // Ensure progress reaches exactly 100%
+      setSpeedTestProgress(100)
+      
       console.log(`Speed test completed: ${finalSpeed.toFixed(2)} MBPS, ${totalBytes} bytes in ${finalTime.toFixed(2)} seconds`)
       setDownloadSpeed(finalSpeed)
       setTotalBytesDownloaded(totalBytes)
       logConnection(currentIP, "speed", undefined, finalSpeed)
-      typeText(`${finalSpeed.toFixed(2)} MBPS`)
+      typeText(`${finalSpeed.toFixed(1)} MBPS FINAL`)
+      
+      // Final graph update
+      const finalSample = { time: finalTime, speed: finalSpeed }
+      setSpeedTestSamples(prev => {
+        const updated = [...prev, finalSample]
+        setTimeout(() => drawSpeedGraph(updated, finalTime), 0)
+        return updated
+      })
 
     } catch (error) {
       if (error.name !== "AbortError") {
@@ -322,7 +338,15 @@ export default function InternetChecker() {
   }
 
   const drawSpeedGraph = (data: SpeedTestSample[], maxTime: number) => {
-    if (!speedGraphRef.current || data.length === 0) return
+    if (!speedGraphRef.current || data.length === 0) {
+      console.log("Cannot draw graph: no container or no data", { 
+        hasContainer: !!speedGraphRef.current, 
+        dataLength: data.length 
+      })
+      return
+    }
+
+    console.log("Drawing graph with", data.length, "data points")
 
     const container = speedGraphRef.current
     const containerWidth = container.clientWidth
@@ -331,25 +355,43 @@ export default function InternetChecker() {
     const width = containerWidth - margin.left - margin.right
     const height = containerHeight - margin.top - margin.bottom
 
-    const svg = d3.select(container).select("svg g")
+    // Ensure we have the SVG structure
+    let svg = d3.select(container).select("svg g")
+    if (svg.empty()) {
+      console.log("SVG not found, reinitializing graph")
+      initializeSpeedGraph()
+      svg = d3.select(container).select("svg g")
+    }
+
+    if (svg.empty()) {
+      console.error("Failed to create or find SVG")
+      return
+    }
 
     // Update scales
     const xScale = d3.scaleLinear()
       .domain([0, maxTime * 1.05])
       .range([0, width])
 
+    const maxSpeed = d3.max(data, d => d.speed) || 0
     const yScale = d3.scaleLinear()
-      .domain([0, (d3.max(data, d => d.speed) || 0) * 1.2])
+      .domain([0, Math.max(maxSpeed * 1.2, 1)]) // Ensure minimum domain of 1
       .range([height, 0])
+
+    console.log("Graph scales:", { 
+      xDomain: [0, maxTime * 1.05], 
+      yDomain: [0, maxSpeed * 1.2],
+      dataPoints: data.length
+    })
 
     // Update axes
     const xAxis = d3.axisBottom(xScale)
       .ticks(5)
-      .tickFormat(d => `${d}s`)
+      .tickFormat(d => `${d.toFixed(1)}s`)
 
     const yAxis = d3.axisLeft(yScale)
       .ticks(5)
-      .tickFormat(d => `${d} MBPS`)
+      .tickFormat(d => `${d.toFixed(0)}`)
 
     svg.select(".x-axis")
       .transition()
@@ -360,6 +402,11 @@ export default function InternetChecker() {
       .style("font-family", "Courier New, Monaco, Lucida Console, monospace")
       .style("font-size", "10px")
 
+    // Style axis lines
+    svg.select(".x-axis")
+      .selectAll("path, line")
+      .style("stroke", "#006600")
+
     svg.select(".y-axis")
       .transition()
       .duration(200)
@@ -369,29 +416,48 @@ export default function InternetChecker() {
       .style("font-family", "Courier New, Monaco, Lucida Console, monospace")
       .style("font-size", "10px")
 
+    svg.select(".y-axis")
+      .selectAll("path, line")
+      .style("stroke", "#006600")
+
     // Update line
     const line = d3.line<SpeedTestSample>()
       .x(d => xScale(d.time))
       .y(d => yScale(d.speed))
+      .curve(d3.curveMonotoneX) // Smooth curve
 
-    svg.select(".speed-line")
+    const linePath = svg.select(".speed-line")
       .datum(data)
-      .transition()
-      .duration(200)
-      .attr("d", line)
+
+    if (data.length > 1) {
+      linePath
+        .transition()
+        .duration(200)
+        .attr("d", line)
+    } else {
+      linePath.attr("d", line)
+    }
+
+    console.log("Graph updated successfully")
   }
 
   const typeText = (text: string) => {
-    setStatusText("")
-    let i = 0
-    const typeInterval = setInterval(() => {
-      if (i < text.length) {
-        setStatusText(text.slice(0, i + 1))
-        i++
-      } else {
-        clearInterval(typeInterval)
-      }
-    }, 100)
+    // For speed test, update immediately to avoid fast blinking
+    if (currentStatusType === "speed" && isSpeedTesting) {
+      setStatusText(text)
+    } else {
+      // Use typing effect for other status updates
+      setStatusText("")
+      let i = 0
+      const typeInterval = setInterval(() => {
+        if (i < text.length) {
+          setStatusText(text.slice(0, i + 1))
+          i++
+        } else {
+          clearInterval(typeInterval)
+        }
+      }, 80) // Slightly faster typing for better UX
+    }
   }
 
   const logConnection = (ip: string, status: "online" | "offline" | "ping" | "speed", pingMs?: number | null, speedMbps?: number) => {
@@ -420,7 +486,7 @@ export default function InternetChecker() {
   useEffect(() => {
     const cursorInterval = setInterval(() => {
       setShowCursor((prev) => !prev)
-    }, 500)
+    }, 800) // Slower blink rate for better readability
 
     return () => clearInterval(cursorInterval)
   }, [])

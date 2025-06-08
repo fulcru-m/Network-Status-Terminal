@@ -37,7 +37,6 @@ export default function InternetChecker() {
   const [totalBytesDownloaded, setTotalBytesDownloaded] = useState(0)
   const abortControllerRef = useRef<AbortController | null>(null)
   const animationFrameRef = useRef<number | null>(null)
-  const [lastSpeedTestResult, setLastSpeedTestResult] = useState<number | null>(null)
 
   // Speed test parameters
   const DOWNLOAD_FILE_SIZE_BYTES = 1000 * 1024 * 1024 // 1000 MB for faster testing
@@ -164,10 +163,6 @@ export default function InternetChecker() {
         // Update graph data
         const newSample = { time: elapsedTime, speed: currentSpeed }
         setSpeedTestSamples(prev => [...prev, newSample])
-        
-        // Save samples to localStorage in real-time
-        const updatedSamples = [...speedTestSamples, newSample]
-        localStorage.setItem("speedTestSamples", JSON.stringify(updatedSamples))
       }
 
       if (totalBytes < DOWNLOAD_FILE_SIZE_BYTES && !signal.aborted) {
@@ -241,13 +236,8 @@ export default function InternetChecker() {
       console.log(`Speed test completed: ${finalSpeed.toFixed(2)} MBPS, ${totalBytes} bytes in ${finalTime.toFixed(2)} seconds`)
       setDownloadSpeed(finalSpeed)
       setTotalBytesDownloaded(totalBytes)
-      setLastSpeedTestResult(finalSpeed)
       logConnection(currentIP, "speed", undefined, finalSpeed)
       setStatusText(`TEST COMPLETE: ${finalSpeed.toFixed(1)} MBPS AVERAGE`)
-      
-      // Save final result and samples to localStorage
-      localStorage.setItem("lastSpeedTestResult", finalSpeed.toString())
-      localStorage.setItem("speedTestSamples", JSON.stringify(speedTestSamples))
 
     } catch (error) {
       if (error.name !== "AbortError") {
@@ -261,13 +251,8 @@ export default function InternetChecker() {
         console.log(`Speed test completed (timeout): ${finalSpeed.toFixed(2)} MBPS, ${totalBytes} bytes in ${finalTime.toFixed(2)} seconds`)
         setDownloadSpeed(finalSpeed)
         setTotalBytesDownloaded(totalBytes)
-        setLastSpeedTestResult(finalSpeed)
         logConnection(currentIP, "speed", undefined, finalSpeed)
         setStatusText(`TEST COMPLETE: ${finalSpeed.toFixed(1)} MBPS AVERAGE`)
-        
-        // Save final result and samples to localStorage
-        localStorage.setItem("lastSpeedTestResult", finalSpeed.toString())
-        localStorage.setItem("speedTestSamples", JSON.stringify(speedTestSamples))
       }
       clearTimeout(testTimeoutId)
     } finally {
@@ -281,7 +266,7 @@ export default function InternetChecker() {
 
   // Simple canvas-based graph drawing
   const drawSpeedGraph = useCallback((data: SpeedTestSample[]) => {
-    if (!speedGraphRef.current) return
+    if (!speedGraphRef.current || data.length === 0) return
 
     const canvas = speedGraphRef.current.querySelector('canvas') as HTMLCanvasElement
     if (!canvas) return
@@ -295,68 +280,6 @@ export default function InternetChecker() {
     
     // Clear canvas
     ctx.clearRect(0, 0, width, height)
-    
-    // If no data, show empty graph with axes
-    if (data.length === 0) {
-      // Set up margins
-      const margin = { top: 20, right: 30, bottom: 40, left: 60 }
-      const graphWidth = width - margin.left - margin.right
-      const graphHeight = height - margin.top - margin.bottom
-      
-      // Draw grid
-      ctx.strokeStyle = 'rgba(0, 255, 65, 0.1)'
-      ctx.lineWidth = 1
-      
-      // Vertical grid lines
-      for (let i = 0; i <= 5; i++) {
-        const x = margin.left + (i / 5) * graphWidth
-        ctx.beginPath()
-        ctx.moveTo(x, margin.top)
-        ctx.lineTo(x, margin.top + graphHeight)
-        ctx.stroke()
-      }
-      
-      // Horizontal grid lines
-      for (let i = 0; i <= 5; i++) {
-        const y = margin.top + (i / 5) * graphHeight
-        ctx.beginPath()
-        ctx.moveTo(margin.left, y)
-        ctx.lineTo(margin.left + graphWidth, y)
-        ctx.stroke()
-      }
-      
-      // Draw axes
-      ctx.strokeStyle = '#00ff41'
-      ctx.lineWidth = 2
-      ctx.beginPath()
-      // X axis
-      ctx.moveTo(margin.left, margin.top + graphHeight)
-      ctx.lineTo(margin.left + graphWidth, margin.top + graphHeight)
-      // Y axis
-      ctx.moveTo(margin.left, margin.top)
-      ctx.lineTo(margin.left, margin.top + graphHeight)
-      ctx.stroke()
-      
-      // Draw labels
-      ctx.fillStyle = '#00ff41'
-      ctx.font = '12px "Courier New", Monaco, "Lucida Console", monospace'
-      ctx.textAlign = 'center'
-      ctx.fillText('TIME (SECONDS)', margin.left + graphWidth / 2, height - 10)
-      
-      ctx.save()
-      ctx.translate(15, margin.top + graphHeight / 2)
-      ctx.rotate(-Math.PI / 2)
-      ctx.fillText('SPEED (MBPS)', 0, 0)
-      ctx.restore()
-      
-      // Show "NO DATA" message
-      ctx.fillStyle = 'rgba(0, 255, 65, 0.5)'
-      ctx.font = '16px "Courier New", Monaco, "Lucida Console", monospace'
-      ctx.textAlign = 'center'
-      ctx.fillText('NO DATA - RUN SPEED TEST', margin.left + graphWidth / 2, margin.top + graphHeight / 2)
-      
-      return
-    }
     
     // Set up margins
     const margin = { top: 20, right: 30, bottom: 40, left: 60 }
@@ -515,13 +438,10 @@ export default function InternetChecker() {
 
   // Update graph when samples change
   useEffect(() => {
-    drawSpeedGraph(speedTestSamples)
+    if (speedTestSamples.length > 0) {
+      drawSpeedGraph(speedTestSamples)
+    }
   }, [speedTestSamples, drawSpeedGraph])
-  
-  // Draw graph on component mount (for empty state)
-  useEffect(() => {
-    drawSpeedGraph(speedTestSamples)
-  }, [drawSpeedGraph])
 
   const typeText = (text: string) => {
     // For speed test, update immediately to avoid fast blinking
@@ -644,28 +564,6 @@ export default function InternetChecker() {
     if (savedLogs) {
       setConnectionLogs(JSON.parse(savedLogs))
     }
-    
-    // Load speed test data from localStorage
-    const savedSpeedTestSamples = localStorage.getItem("speedTestSamples")
-    if (savedSpeedTestSamples) {
-      try {
-        const samples = JSON.parse(savedSpeedTestSamples)
-        setSpeedTestSamples(samples)
-      } catch (error) {
-        console.error("Failed to load speed test samples:", error)
-      }
-    }
-    
-    const savedLastSpeedTestResult = localStorage.getItem("lastSpeedTestResult")
-    if (savedLastSpeedTestResult) {
-      try {
-        const result = parseFloat(savedLastSpeedTestResult)
-        setLastSpeedTestResult(result)
-        setDownloadSpeed(result)
-      } catch (error) {
-        console.error("Failed to load last speed test result:", error)
-      }
-    }
 
     checkConnection()
 
@@ -747,168 +645,133 @@ export default function InternetChecker() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-[#00ff41] font-mono relative overflow-hidden">
-      {/* Matrix Background */}
-      {animationEnabled && (
-        <canvas
-          ref={canvasRef}
-          className="fixed inset-0 pointer-events-none opacity-20"
-          style={{ zIndex: 0 }}
-        />
-      )}
+    <div className="min-h-screen flex items-center justify-center p-4">
+      {animationEnabled && <canvas ref={canvasRef} className="matrix-bg"></canvas>}
 
-      {/* Main Content */}
-      <div className="relative z-10 p-6">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-2 tracking-wider">
-            INTERNET CONNECTION MONITOR
-          </h1>
-          <div className="text-sm opacity-70">
-            SYSTEM STATUS: {isOnline === null ? "INITIALIZING" : isOnline ? "OPERATIONAL" : "OFFLINE"}
+      <div className="w-full max-w-4xl z-10">
+        <div className="terminal-container">
+          <div className="terminal-header">
+            <span className="typing-effect">NETWORK STATUS TERMINAL</span>
           </div>
-        </div>
 
-        {/* Main Status Display */}
-        <div className="max-w-4xl mx-auto mb-8">
-          <div className="bg-black border border-[#00ff41] p-6 rounded-lg shadow-lg shadow-[#00ff41]/20">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Connection Status */}
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <Globe className="w-6 h-6 mr-2" />
-                  <span className="text-lg font-semibold">CONNECTION</span>
+          <div className="terminal-content p-6">
+            {/* Status Display */}
+            <div className="mb-8 text-center">
+              {isOnline === null ? (
+                <div>
+                  <div className="text-lg mb-2">Checking connection...</div>
+                  <div className="text-sm opacity-70">Please wait</div>
                 </div>
-                <div className={`text-2xl font-bold ${getStatusColor()}`}>
-                  {isOnline === null ? "CHECKING..." : isOnline ? "ONLINE" : "OFFLINE"}
+              ) : (
+                <div>
+                  <div className="text-2xl mb-2">
+                    <span className={getStatusColor()}>{statusText}</span>
+                    <span className={`cursor-blink ${getStatusColor()}`}>{showCursor ? "|" : "\u00A0"}</span>
+                  </div>
+                  {isOnline && (
+                    <div className="text-lg mb-2">
+                      <Globe className="inline w-4 h-4 mr-2" />
+                      IP: {currentIP}
+                    </div>
+                  )}
+                  <div className="text-sm opacity-70">
+                    {isOnline ? "Network connection active" : "Viewing from offline cache"}
+                  </div>
                 </div>
-                <div className="text-sm opacity-70 mt-1">
-                  IP: {currentIP || "Unknown"}
-                </div>
-              </div>
-
-              {/* Ping Status */}
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <Clock className="w-6 h-6 mr-2" />
-                  <span className="text-lg font-semibold">PING</span>
-                </div>
-                <div className={`text-2xl font-bold ${getStatusColor()}`}>
-                  {isPinging ? "TESTING..." : pingTime !== null ? `${pingTime}ms` : "NOT TESTED"}
-                </div>
-                <div className="text-sm opacity-70 mt-1">
-                  Latency to Cloudflare
-                </div>
-              </div>
-
-              {/* Speed Status */}
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <Zap className="w-6 h-6 mr-2" />
-                  <span className="text-lg font-semibold">SPEED</span>
-                </div>
-                <div className={`text-2xl font-bold ${getStatusColor()}`}>
-                  {isSpeedTesting ? "TESTING..." : downloadSpeed !== null ? `${downloadSpeed.toFixed(1)} MBPS` : "NOT TESTED"}
-                </div>
-                <div className="text-sm opacity-70 mt-1">
-                  Download Speed
-                </div>
-              </div>
-            </div>
-
-            {/* Status Text with Cursor */}
-            <div className="mt-6 text-center">
-              <div className="text-lg font-mono">
-                <span className={getStatusColor()}>
-                  {statusText}
-                  {showCursor && <span className="animate-pulse">_</span>}
-                </span>
-              </div>
+              )}
             </div>
 
             {/* Control Buttons */}
-            <div className="flex flex-wrap justify-center gap-4 mt-6">
-              <button
-                onClick={checkConnection}
-                disabled={isChecking}
-                className="flex items-center px-4 py-2 bg-transparent border border-[#00ff41] text-[#00ff41] hover:bg-[#00ff41] hover:text-black transition-colors disabled:opacity-50"
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${isChecking ? "animate-spin" : ""}`} />
-                {isChecking ? "CHECKING..." : "CHECK CONNECTION"}
+            <div className="flex justify-center items-center gap-4 mb-6 flex-wrap">
+              <button onClick={checkConnection} disabled={isChecking} className="terminal-button w-20 h-20" title="Check Connection">
+                {isChecking ? (
+                  <RefreshCw className="w-12 h-12 pulse-sonar" />
+                ) : (
+                  <RefreshCw className="w-12 h-12" />
+                )}
               </button>
 
-              <button
-                onClick={checkPing}
-                disabled={isPinging || !isOnline}
-                className="flex items-center px-4 py-2 bg-transparent border border-[#00ff41] text-[#00ff41] hover:bg-[#00ff41] hover:text-black transition-colors disabled:opacity-50"
-              >
-                <Clock className={`w-4 h-4 mr-2 ${isPinging ? "animate-spin" : ""}`} />
-                {isPinging ? "PINGING..." : "TEST PING"}
+              <button onClick={checkPing} disabled={isPinging || !isOnline} className="terminal-button w-20 h-20" title="Ping Test">
+                {isPinging ? (
+                  <Zap className="w-12 h-12 pulse-sonar" />
+                ) : (
+                  <Zap className="w-12 h-12" />
+                )}
               </button>
 
-              <button
-                onClick={runSpeedTest}
-                disabled={isSpeedTesting || !isOnline}
-                className="flex items-center px-4 py-2 bg-transparent border border-[#00ff41] text-[#00ff41] hover:bg-[#00ff41] hover:text-black transition-colors disabled:opacity-50"
-              >
-                <Zap className={`w-4 h-4 mr-2 ${isSpeedTesting ? "animate-spin" : ""}`} />
-                {isSpeedTesting ? "TESTING..." : "TEST SPEED"}
-              </button>
-
-              <button
-                onClick={toggleAnimation}
-                className="flex items-center px-4 py-2 bg-transparent border border-[#00ff41] text-[#00ff41] hover:bg-[#00ff41] hover:text-black transition-colors"
-              >
-                <Activity className="w-4 h-4 mr-2" />
-                {animationEnabled ? "DISABLE MATRIX" : "ENABLE MATRIX"}
+              <button onClick={runSpeedTest} disabled={isSpeedTesting || !isOnline} className="terminal-button w-20 h-20" title="Speed Test">
+                {isSpeedTesting ? (
+                  <Activity className="w-12 h-12 pulse-sonar" />
+                ) : (
+                  <Activity className="w-12 h-12" />
+                )}
               </button>
             </div>
-          </div>
-        </div>
 
-        {/* Speed Test Graph */}
-        {(isSpeedTesting || speedTestSamples.length > 0) && (
-          <div className="max-w-4xl mx-auto mb-8">
-            <div className="bg-black border border-[#00ff41] p-6 rounded-lg shadow-lg shadow-[#00ff41]/20">
-              <h3 className="text-xl font-bold mb-4 text-center">SPEED TEST GRAPH</h3>
-              <div ref={speedGraphRef} className="w-full h-64 relative">
-                <canvas className="w-full h-full" />
-              </div>
-              {isSpeedTesting && (
-                <div className="mt-4 text-center text-sm opacity-70">
-                  Downloaded: {(totalBytesDownloaded / (1024 * 1024)).toFixed(1)} MB
+            {/* Speed Test Graph */}
+            {(isSpeedTesting || speedTestSamples.length > 0) && (
+              <div className="mb-6">
+                <div className="text-lg mb-4">
+                  {isSpeedTesting && downloadSpeed !== null 
+                    ? `Current Speed: ${downloadSpeed.toFixed(1)} MBPS`
+                    : downloadSpeed !== null 
+                      ? `Throughput: ${downloadSpeed.toFixed(1)} MBPS`
+                      : "Speed Test Graph"
+                  }
                 </div>
-              )}
-            </div>
-          </div>
-        )}
+                <div 
+                  ref={speedGraphRef}
+                  className="w-full h-52 bg-black border border-[#00cc00] p-2"
+                >
+                  <canvas 
+                    width={800} 
+                    height={200} 
+                    className="w-full h-full"
+                    style={{ imageRendering: 'pixelated' }}
+                  />
+                </div>
+              </div>
+            )}
 
-        {/* Connection Logs */}
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-black border border-[#00ff41] p-6 rounded-lg shadow-lg shadow-[#00ff41]/20">
-            <h3 className="text-xl font-bold mb-4">CONNECTION LOG</h3>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {connectionLogs.length === 0 ? (
-                <div className="text-center opacity-50">No connection logs yet</div>
-              ) : (
-                connectionLogs.map((log, index) => (
-                  <div key={index} className="flex justify-between items-center py-2 border-b border-[#00ff41]/20">
-                    <div className="flex items-center space-x-4">
-                      <span className="text-sm opacity-70">{formatDateTime(log.timestamp)}</span>
-                      <span className="text-sm">{log.ip}</span>
-                    </div>
-                    <span className={`font-bold ${getLogStatusColor(log)}`}>
-                      {getLogStatusDisplay(log)}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
+            {/* Last Checked */}
             {lastChecked && (
-              <div className="mt-4 text-sm opacity-70 text-center">
+              <div className="text-center text-sm opacity-70 mb-6">
+                <Clock className="inline w-4 h-4 mr-1" />
                 Last checked: {lastChecked}
               </div>
             )}
+
+            {/* Connection History */}
+            {connectionLogs.length > 0 && (
+              <div className="mt-8">
+                <div className="text-lg mb-4">Telemetry Data:</div>
+                <div className="font-mono text-sm max-h-60 overflow-y-auto scrollbar-hide border border-[#333] bg-black/50">
+                  <div className="sticky top-0 z-10 bg-black/90 backdrop-blur-sm border-b border-[#333]">
+                    <div className="flex opacity-70 p-2 text-[#00ff41] text-xs sm:text-sm">
+                      <div className="w-16 sm:w-24 text-left truncate">STATUS</div>
+                      <div className="w-20 sm:w-32 text-left truncate">IP</div>
+                      <div className="flex-1 text-left truncate">TIME</div>
+                    </div>
+                  </div>
+                  <div>
+                    {connectionLogs.map((log, index) => (
+                      <div key={index} className={`flex p-2 text-xs sm:text-sm ${getLogStatusColor(log)} hover:bg-black/30 transition-colors`}>
+                        <div className="w-16 sm:w-24 truncate">{getLogStatusDisplay(log)}</div>
+                        <div className="w-20 sm:w-32 truncate" title={log.ip}>{log.ip}</div>
+                        <div className="flex-1 truncate" title={formatDateTime(log.timestamp)}>{formatDateTime(log.timestamp)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Settings at Bottom */}
+            <div className="mt-8 text-center">
+              <button onClick={toggleAnimation} className="terminal-button">
+                {animationEnabled ? "VT100 graphics subsystem OFF" : "VT100 graphics subsystem ON"}
+              </button>
+            </div>
           </div>
         </div>
       </div>

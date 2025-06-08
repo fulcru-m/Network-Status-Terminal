@@ -133,7 +133,6 @@ export default function InternetChecker() {
       if (!signal.aborted) {
         console.log("Speed test timed out after", TEST_TIMEOUT_SECONDS, "seconds")
         abortControllerRef.current?.abort()
-        typeText("TEST TIMEOUT")
       }
     }, TEST_TIMEOUT_SECONDS * 1000)
 
@@ -247,8 +246,15 @@ export default function InternetChecker() {
         console.error("Speed test failed:", error)
         setStatusText("SPEED TEST FAILED - CHECK CONNECTION")
       } else {
-        console.log("Speed test was aborted")
-        setStatusText("SPEED TEST ABORTED")
+        // Handle timeout as normal completion
+        const finalTime = (performance.now() - overallStartTime) / 1000
+        const finalSpeed = totalBytes > 0 ? (totalBytes * 8) / finalTime / (1024 * 1024) : 0
+        
+        console.log(`Speed test completed (timeout): ${finalSpeed.toFixed(2)} MBPS, ${totalBytes} bytes in ${finalTime.toFixed(2)} seconds`)
+        setDownloadSpeed(finalSpeed)
+        setTotalBytesDownloaded(totalBytes)
+        logConnection(currentIP, "speed", undefined, finalSpeed)
+        setStatusText(`TEST COMPLETE: ${finalSpeed.toFixed(1)} MBPS AVERAGE`)
       }
       clearTimeout(testTimeoutId)
     } finally {
@@ -351,17 +357,6 @@ export default function InternetChecker() {
     })
     
     ctx.stroke()
-    
-    // Draw data points
-    ctx.fillStyle = '#00ff41'
-    data.forEach(point => {
-      const x = margin.left + (point.time / maxTime) * graphWidth
-      const y = margin.top + graphHeight - (point.speed / (maxSpeed * 1.1)) * graphHeight
-      
-      ctx.beginPath()
-      ctx.arc(x, y, 3, 0, 2 * Math.PI)
-      ctx.fill()
-    })
     
     // Draw axis labels
     ctx.fillStyle = '#00cc00'

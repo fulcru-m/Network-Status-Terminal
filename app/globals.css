@@ -140,8 +140,8 @@ input[type="checkbox"] {
   }
 }
 
-.animate-pulse-sonar {
-  animation: pulse-sonar 1.5s ease-in-out infinite;
+.pulse-sonar {
+  animation: pulse-sonar 1.2s ease-in-out infinite;
 }
 
 /* Hide scrollbar while keeping functionality */

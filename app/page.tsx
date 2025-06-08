@@ -688,7 +688,7 @@ export default function InternetChecker() {
             <div className="flex justify-center items-center gap-4 mb-6 flex-wrap">
               <button onClick={checkConnection} disabled={isChecking} className="terminal-button w-20 h-20" title="Check Connection">
                 {isChecking ? (
-                  <RefreshCw className="w-12 h-12 animate-pulse-sonar" />
+                  <RefreshCw className="w-12 h-12 pulse-sonar" />
                 ) : (
                   <RefreshCw className="w-12 h-12" />
                 )}
@@ -696,7 +696,7 @@ export default function InternetChecker() {
 
               <button onClick={checkPing} disabled={isPinging || !isOnline} className="terminal-button w-20 h-20" title="Ping Test">
                 {isPinging ? (
-                  <Zap className="w-12 h-12 animate-pulse-sonar" />
+                  <Zap className="w-12 h-12 pulse-sonar" />
                 ) : (
                   <Zap className="w-12 h-12" />
                 )}
@@ -704,7 +704,7 @@ export default function InternetChecker() {
 
               <button onClick={runSpeedTest} disabled={isSpeedTesting || !isOnline} className="terminal-button w-20 h-20" title="Speed Test">
                 {isSpeedTesting ? (
-                  <Activity className="w-12 h-12 animate-pulse-sonar" />
+                  <Activity className="w-12 h-12 pulse-sonar" />
                 ) : (
                   <Activity className="w-12 h-12" />
                 )}

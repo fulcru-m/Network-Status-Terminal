@@ -695,7 +695,7 @@ export default function InternetChecker() {
       <div className="w-full max-w-4xl z-10">
         <div className="terminal-container">
           <div className="terminal-header">
-            <span className="typing-effect">NETWORK STATUS TERMINAL</span>
+            <span className="typing-effect">NETWORK STATUS TERMINAL 3v</span>
           </div>
 
           <div className="terminal-content p-6">

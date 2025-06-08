@@ -590,8 +590,8 @@ export default function InternetChecker() {
 
   const formatDateTime = (timestamp: string) => {
     const date = new Date(timestamp)
-    const dateStr = date.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "2-digit" })
-    const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    const dateStr = date.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit" })
+    const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     return `${dateStr} ${timeStr}`
   }
 
@@ -772,20 +772,20 @@ export default function InternetChecker() {
             {connectionLogs.length > 0 && (
               <div className="mt-8">
                 <div className="text-lg mb-4">Telemetry Data:</div>
-                <div className="font-mono text-sm max-h-48 overflow-y-auto scrollbar-hide">
-                  <div className="sticky top-0 z-10">
-                    <div className="flex opacity-70 p-2 text-[#00ff41]">
-                      <div className="w-24 text-left">STATUS</div>
-                      <div className="w-32 text-left">IP ADDRESS</div>
-                      <div className="flex-1 text-left">TIMESTAMP</div>
+                <div className="font-mono text-sm max-h-60 overflow-y-auto scrollbar-hide border border-[#333] bg-black/50">
+                  <div className="sticky top-0 z-10 bg-black/90 backdrop-blur-sm border-b border-[#333]">
+                    <div className="flex opacity-70 p-2 text-[#00ff41] text-xs sm:text-sm">
+                      <div className="w-16 sm:w-24 text-left truncate">STATUS</div>
+                      <div className="w-20 sm:w-32 text-left truncate">IP</div>
+                      <div className="flex-1 text-left truncate">TIME</div>
                     </div>
                   </div>
                   <div>
                     {connectionLogs.map((log, index) => (
-                      <div key={index} className={`flex p-2 ${getLogStatusColor(log)}`}>
-                        <div className="w-24">{getLogStatusDisplay(log)}</div>
-                        <div className="w-32">{log.ip}</div>
-                        <div className="flex-1">{formatDateTime(log.timestamp)}</div>
+                      <div key={index} className={`flex p-2 text-xs sm:text-sm ${getLogStatusColor(log)} hover:bg-black/30 transition-colors`}>
+                        <div className="w-16 sm:w-24 truncate">{getLogStatusDisplay(log)}</div>
+                        <div className="w-20 sm:w-32 truncate" title={log.ip}>{log.ip}</div>
+                        <div className="flex-1 truncate" title={formatDateTime(log.timestamp)}>{formatDateTime(log.timestamp)}</div>
                       </div>
                     ))}
                   </div>

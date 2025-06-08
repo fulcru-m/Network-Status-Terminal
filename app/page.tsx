@@ -1,5 +1,6 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { useState, useEffect, useRef } from "react"
 import { RefreshCw, Clock, Globe, Zap } from "lucide-react"
 
@@ -10,7 +11,7 @@ interface ConnectionLog {
   pingTime?: number
 }
 
-export default function InternetChecker() {
+function InternetChecker() {
   const [isOnline, setIsOnline] = useState<boolean | null>(null)
   const [isChecking, setIsChecking] = useState(false)
   const [isPinging, setIsPinging] = useState(false)
@@ -365,3 +366,7 @@ export default function InternetChecker() {
     </div>
   )
 }
+
+export default dynamic(() => Promise.resolve(InternetChecker), {
+  ssr: false
+})

@@ -4,7 +4,7 @@ export async function GET() {
   try {
     const startTime = Date.now()
 
-    // Use Cloudflare's speed test endpoint instead of 1.1.1.1 directly
+    // Use Cloudflare's speed test endpoint which automatically routes to the closest server
     const response = await fetch("https://speed.cloudflare.com/__down?bytes=1", {
       method: "GET",
       cache: "no-cache",

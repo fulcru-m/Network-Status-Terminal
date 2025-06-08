@@ -19,7 +19,6 @@ export default function InternetChecker() {
   const [connectionLogs, setConnectionLogs] = useState<ConnectionLog[]>([])
   const [lastChecked, setLastChecked] = useState<string>("")
   const [animationEnabled, setAnimationEnabled] = useState(true)
-  const [useCloudflare, setUseCloudflare] = useState(false)
   const [statusText, setStatusText] = useState("")
   const [showCursor, setShowCursor] = useState(true)
   const [currentStatusType, setCurrentStatusType] = useState<"connection" | "ping">("connection")
@@ -62,7 +61,8 @@ export default function InternetChecker() {
     try {
       const startTime = performance.now()
 
-      const endpoint = useCloudflare ? "https://speed.cloudflare.com/__down?bytes=1" : "https://httpbin.org/status/200"
+      // Always use Cloudflare's speed test endpoint which automatically routes to the closest server
+      const endpoint = "https://speed.cloudflare.com/__down?bytes=1"
 
       const response = await fetch(endpoint, {
         method: "GET",
@@ -120,12 +120,6 @@ export default function InternetChecker() {
     const newState = !animationEnabled
     setAnimationEnabled(newState)
     localStorage.setItem("animationEnabled", JSON.stringify(newState))
-  }
-
-  const toggleCloudflare = () => {
-    const newState = !useCloudflare
-    setUseCloudflare(newState)
-    localStorage.setItem("useCloudflare", JSON.stringify(newState))
   }
 
   useEffect(() => {
@@ -198,11 +192,6 @@ export default function InternetChecker() {
     const savedAnimation = localStorage.getItem("animationEnabled")
     if (savedAnimation !== null) {
       setAnimationEnabled(JSON.parse(savedAnimation))
-    }
-
-    const savedCloudflare = localStorage.getItem("useCloudflare")
-    if (savedCloudflare !== null) {
-      setUseCloudflare(JSON.parse(savedCloudflare))
     }
 
     const savedLogs = localStorage.getItem("connectionLogs")
@@ -368,11 +357,6 @@ export default function InternetChecker() {
               <label className="flex items-center text-sm cursor-pointer">
                 <input type="checkbox" checked={animationEnabled} onChange={toggleAnimation} className="w-4 h-4 mr-3" />
                 <span>Enable VT100 graphics subsystem</span>
-              </label>
-
-              <label className="flex items-center text-sm cursor-pointer">
-                <input type="checkbox" checked={useCloudflare} onChange={toggleCloudflare} className="w-4 h-4 mr-3" />
-                <span>Use Cloudflare DNS resolver for latency tests</span>
               </label>
             </div>
           </div>

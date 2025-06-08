@@ -346,7 +346,7 @@ export default function InternetChecker() {
     ctx.fillStyle = '#00ff41'
     ctx.font = `${isMobile ? '10px' : '12px'} "Courier New", Monaco, "Lucida Console", monospace`
     ctx.textAlign = 'center'
-    ctx.fillText('TIME (SECONDS)', margin.left + graphWidth / 2, height - (isMobile ? 5 : 10))
+    ctx.fillText('TIME (SECONDS)', margin.left + graphWidth / 2, height - (isMobile ? 8 : 10))
     
     ctx.save()
     ctx.translate(isMobile ? 10 : 15, margin.top + graphHeight / 2)
@@ -440,7 +440,7 @@ export default function InternetChecker() {
     for (let i = 0; i <= 5; i++) {
       const x = margin.left + (i / 5) * graphWidth
       const time = (i / 5) * maxTime
-      ctx.fillText(`${time.toFixed(1)}s`, x, margin.top + graphHeight + (isMobile ? 15 : 20))
+      ctx.fillText(`${time.toFixed(1)}s`, x, margin.top + graphHeight + (isMobile ? 12 : 20))
     }
     
     // Y-axis labels

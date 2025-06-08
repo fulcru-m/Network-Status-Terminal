@@ -155,9 +155,9 @@ export default function InternetChecker() {
         if (elapsedTime < 1) {
           setStatusText("INITIALIZING SPEED TEST...")
         } else if (progressPercent < 10) {
-          setStatusText(`ESTABLISHING CONNECTIONS... ${progressPercent.toFixed(0)}%`)
+          setStatusText(`ESTABLISHING CONNECTIONS...`)
         } else if (progressPercent < 90) {
-          setStatusText(`DOWNLOADING ${mbDownloaded}MB/${mbTotal}MB AT ${currentSpeed.toFixed(1)} MBPS`)
+          setStatusText(`DOWNLOADING ${mbDownloaded}MB AT ${currentSpeed.toFixed(1)} MBPS`)
         } else {
           setStatusText(`FINALIZING TEST... ${currentSpeed.toFixed(1)} MBPS`)
         }
@@ -342,21 +342,46 @@ export default function InternetChecker() {
     
     // Draw speed line
     ctx.strokeStyle = '#00ff41'
-    ctx.lineWidth = 2
+    ctx.lineWidth = 3
     ctx.beginPath()
     
-    data.forEach((point, index) => {
-      const x = margin.left + (point.time / maxTime) * graphWidth
-      const y = margin.top + graphHeight - (point.speed / (maxSpeed * 1.1)) * graphHeight
+    // Create smooth curve using quadratic curves
+    if (data.length >= 2) {
+      // Start point
+      const firstPoint = data[0]
+      const firstX = margin.left + (firstPoint.time / maxTime) * graphWidth
+      const firstY = margin.top + graphHeight - (firstPoint.speed / (maxSpeed * 1.1)) * graphHeight
+      ctx.moveTo(firstX, firstY)
       
-      if (index === 0) {
-        ctx.moveTo(x, y)
-      } else {
-        ctx.lineTo(x, y)
+      // Draw smooth curves between points
+      for (let i = 1; i < data.length; i++) {
+        const currentPoint = data[i]
+        const currentX = margin.left + (currentPoint.time / maxTime) * graphWidth
+        const currentY = margin.top + graphHeight - (currentPoint.speed / (maxSpeed * 1.1)) * graphHeight
+        
+        if (i === 1) {
+          // For the second point, draw a line to establish the curve
+          ctx.lineTo(currentX, currentY)
+        } else {
+          // For subsequent points, use quadratic curves for smoothness
+          const prevPoint = data[i - 1]
+          const prevX = margin.left + (prevPoint.time / maxTime) * graphWidth
+          const prevY = margin.top + graphHeight - (prevPoint.speed / (maxSpeed * 1.1)) * graphHeight
+          
+          // Control point is the midpoint between previous and current
+          const controlX = (prevX + currentX) / 2
+          const controlY = (prevY + currentY) / 2
+          
+          ctx.quadraticCurveTo(controlX, controlY, currentX, currentY)
+        }
       }
-    })
+    }
     
+    // Add glow effect
+    ctx.shadowColor = '#00ff41'
+    ctx.shadowBlur = 5
     ctx.stroke()
+    ctx.shadowBlur = 0
     
     // Draw axis labels
     ctx.fillStyle = '#00cc00'

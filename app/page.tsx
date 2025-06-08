@@ -42,12 +42,11 @@ export default function InternetChecker() {
   const animationFrameRef = useRef<number | null>(null)
 
   // Speed test parameters
-  const DOWNLOAD_FILE_SIZE_BYTES = 1000 * 1024 * 1024 // 1000 MB for faster testing
+  const DOWNLOAD_FILE_SIZE_BYTES = 100 * 1024 * 1024 // 100 MB for faster testing
   const DOWNLOAD_TEST_URL_BASE = "https://speed.cloudflare.com/__down"
-  const NUM_PARALLEL_CONNECTIONS = 12
+  const NUM_PARALLEL_CONNECTIONS = 6
   const GRAPH_SAMPLE_INTERVAL_MS = 200
-  const TEST_TIMEOUT_SECONDS = 30 // Maximum timeout
-  const MINIMUM_TEST_DURATION_SECONDS = 10 // Minimum test duration
+  const TEST_TIMEOUT_SECONDS = 30 // Increased timeout to 30 seconds
 
   const checkConnection = async () => {
     setIsChecking(true)
@@ -132,7 +131,6 @@ export default function InternetChecker() {
 
     const overallStartTime = performance.now()
     let lastGraphUpdateTime = overallStartTime
-    let testCompleted = false
 
     // Setup abort controller
     abortControllerRef.current = new AbortController()
@@ -151,7 +149,6 @@ export default function InternetChecker() {
     const updateUI = () => {
       const currentTime = performance.now()
       const elapsedTime = (currentTime - overallStartTime) / 1000
-      const hasReachedMinimumDuration = elapsedTime >= MINIMUM_TEST_DURATION_SECONDS
 
       if (elapsedTime > 0) {
         const currentSpeed = (totalBytes * 8) / elapsedTime / (1024 * 1024)
@@ -166,12 +163,9 @@ export default function InternetChecker() {
         // Set verbose status based on test phase
         if (elapsedTime < 1) {
           setStatusText("INITIALIZING SPEED TEST...")
-        } else if (progressPercent < 10 || elapsedTime < 3) {
+        } else if (progressPercent < 10) {
           setStatusText(`ESTABLISHING CONNECTIONS... ${progressPercent.toFixed(0)}%`)
-        } else if (!hasReachedMinimumDuration) {
-          const remainingTime = MINIMUM_TEST_DURATION_SECONDS - elapsedTime
-          setStatusText(`TESTING... ${currentSpeed.toFixed(1)} MBPS (${remainingTime.toFixed(0)}s remaining)`)
-        } else if (progressPercent < 90 && !testCompleted) {
+        } else if (progressPercent < 90) {
           setStatusText(`DOWNLOADING ${mbDownloaded}MB/${mbTotal}MB AT ${currentSpeed.toFixed(1)} MBPS`)
         } else {
           setStatusText(`FINALIZING TEST... ${currentSpeed.toFixed(1)} MBPS`)
@@ -190,10 +184,7 @@ export default function InternetChecker() {
         }
       }
 
-      // Continue test until minimum duration is reached OR download is complete
-      const shouldContinue = (!hasReachedMinimumDuration || totalBytes < DOWNLOAD_FILE_SIZE_BYTES) && !signal.aborted && !testCompleted
-      
-      if (shouldContinue) {
+      if (totalBytes < DOWNLOAD_FILE_SIZE_BYTES && !signal.aborted) {
         animationFrameRef.current = requestAnimationFrame(updateUI)
       } else {
         if (animationFrameRef.current) {
@@ -201,7 +192,6 @@ export default function InternetChecker() {
           animationFrameRef.current = null
         }
         if (!signal.aborted) {
-          testCompleted = true
           clearTimeout(testTimeoutId)
         }
       }
@@ -258,37 +248,6 @@ export default function InternetChecker() {
       console.log("Waiting for all download connections to complete...")
       await Promise.all(downloadPromises)
       clearTimeout(testTimeoutId)
-      
-      // Wait for minimum duration if test completed too quickly
-      const currentElapsedTime = (performance.now() - overallStartTime) / 1000
-      if (currentElapsedTime < MINIMUM_TEST_DURATION_SECONDS) {
-        const remainingTime = MINIMUM_TEST_DURATION_SECONDS - currentElapsedTime
-        console.log(`Test completed early, waiting ${remainingTime.toFixed(2)} more seconds to reach minimum duration`)
-        
-        // Continue updating UI during wait period
-        const waitStartTime = performance.now()
-        while ((performance.now() - overallStartTime) / 1000 < MINIMUM_TEST_DURATION_SECONDS && !signal.aborted) {
-          const waitElapsedTime = (performance.now() - waitStartTime) / 1000
-          const totalElapsedTime = (performance.now() - overallStartTime) / 1000
-          const remainingWaitTime = MINIMUM_TEST_DURATION_SECONDS - totalElapsedTime
-          
-          const currentSpeed = (totalBytes * 8) / totalElapsedTime / (1024 * 1024)
-          setDownloadSpeed(currentSpeed)
-          setStatusText(`TEST COMPLETE - WAITING ${remainingWaitTime.toFixed(0)}s FOR MINIMUM DURATION`)
-          
-          // Add final samples to graph during wait period
-          const finalSample = { time: totalElapsedTime, speed: currentSpeed }
-          setSpeedTestSamples(prev => {
-            const updated = [...prev, finalSample]
-            setTimeout(() => drawSpeedGraph(updated, totalElapsedTime), 0)
-            return updated
-          })
-          
-          await new Promise(resolve => setTimeout(resolve, 200)) // Wait 200ms between updates
-        }
-      }
-      
-      testCompleted = true
 
       const finalTime = (performance.now() - overallStartTime) / 1000
       const finalSpeed = (totalBytes * 8) / finalTime / (1024 * 1024)
@@ -695,7 +654,7 @@ export default function InternetChecker() {
       <div className="w-full max-w-4xl z-10">
         <div className="terminal-container">
           <div className="terminal-header">
-            <span className="typing-effect">NETWORK STATUS TERMINAL 3v</span>
+            <span className="typing-effect">NETWORK STATUS TERMINAL</span>
           </div>
 
           <div className="terminal-content p-6">

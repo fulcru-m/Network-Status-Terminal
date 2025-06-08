@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { RefreshCw, Clock, Globe, Zap, Activity } from "lucide-react"
+import { RefreshCw, Clock, Globe, Zap, Activity, TrendingUp } from "lucide-react"
 
 interface ConnectionLog {
   ip: string
@@ -9,6 +9,11 @@ interface ConnectionLog {
   status: "online" | "offline" | "ping" | "speed"
   pingTime?: number
   downloadSpeed?: number
+}
+
+interface SpeedDataPoint {
+  time: number
+  speed: number
 }
 
 export default function InternetChecker() {
@@ -25,7 +30,10 @@ export default function InternetChecker() {
   const [statusText, setStatusText] = useState("")
   const [showCursor, setShowCursor] = useState(true)
   const [currentStatusType, setCurrentStatusType] = useState<"connection" | "ping" | "speed">("connection")
+  const [speedData, setSpeedData] = useState<SpeedDataPoint[]>([])
+  const [showGraph, setShowGraph] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const graphCanvasRef = useRef<HTMLCanvasElement>(null)
 
   const checkConnection = async () => {
     setIsChecking(true)
@@ -98,40 +106,71 @@ export default function InternetChecker() {
     setIsSpeedTesting(true)
     setCurrentStatusType("speed")
     setDownloadSpeed(null)
+    setSpeedData([])
+    setShowGraph(true)
+
+    const testDuration = 10000 // 10 seconds
+    const sampleInterval = 200 // Sample every 200ms
+    let totalBytes = 0
+    let startTime = performance.now()
+    let abortController = new AbortController()
 
     try {
-      const startTime = performance.now()
-      const endpoint = "https://speed.cloudflare.com/__down?bytes=10485760" // 10MB
+      // Start multiple parallel downloads
+      const numConnections = 4
+      const downloadPromises = []
 
-      const response = await fetch(endpoint, {
-        method: "GET",
-        cache: "no-cache",
-        mode: "cors",
-      })
+      for (let i = 0; i < numConnections; i++) {
+        const promise = fetch(`https://speed.cloudflare.com/__down?bytes=10485760&r=${Math.random()}`, {
+          signal: abortController.signal,
+          cache: "no-cache",
+        }).then(async (response) => {
+          if (!response.ok) throw new Error("Download failed")
+          
+          const reader = response.body?.getReader()
+          if (!reader) throw new Error("No reader available")
 
-      if (!response.ok) {
-        throw new Error("Speed test failed")
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            totalBytes += value.length
+          }
+        })
+        
+        downloadPromises.push(promise)
       }
 
-      const reader = response.body?.getReader()
-      if (!reader) {
-        throw new Error("No reader available")
+      // Sample speed data points
+      const sampleInterval_id = setInterval(() => {
+        const elapsed = (performance.now() - startTime) / 1000
+        const speedMbps = (totalBytes * 8) / elapsed / (1024 * 1024)
+        
+        setSpeedData(prev => [...prev, { time: elapsed, speed: speedMbps }])
+        setDownloadSpeed(speedMbps)
+        typeText(`${speedMbps.toFixed(1)} MBPS`)
+      }, sampleInterval)
+
+      // Stop test after duration
+      setTimeout(() => {
+        abortController.abort()
+        clearInterval(sampleInterval_id)
+      }, testDuration)
+
+      try {
+        await Promise.all(downloadPromises)
+      } catch (error) {
+        // Expected when we abort
       }
 
-      let totalBytes = 0
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        totalBytes += value.length
-      }
+      clearInterval(sampleInterval_id)
 
-      const endTime = performance.now()
-      const duration = (endTime - startTime) / 1000
-      const speedMbps = (totalBytes * 8) / duration / (1024 * 1024)
+      const finalElapsed = (performance.now() - startTime) / 1000
+      const finalSpeed = (totalBytes * 8) / finalElapsed / (1024 * 1024)
+      
+      setDownloadSpeed(finalSpeed)
+      logConnection(currentIP, "speed", undefined, finalSpeed)
+      typeText(`${finalSpeed.toFixed(1)} MBPS`)
 
-      setDownloadSpeed(speedMbps)
-      logConnection(currentIP, "speed", undefined, speedMbps)
-      typeText(`${speedMbps.toFixed(1)} MBPS`)
     } catch (error) {
       logConnection(currentIP, "speed", undefined, undefined)
       typeText("SPEED TEST FAILED")
@@ -174,6 +213,98 @@ export default function InternetChecker() {
     setAnimationEnabled(newState)
     localStorage.setItem("animationEnabled", JSON.stringify(newState))
   }
+
+  // Draw speed graph
+  useEffect(() => {
+    if (!showGraph || speedData.length === 0) return
+
+    const canvas = graphCanvasRef.current
+    if (!canvas) return
+
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+
+    const rect = canvas.getBoundingClientRect()
+    canvas.width = rect.width * 2
+    canvas.height = rect.height * 2
+    ctx.scale(2, 2)
+
+    const width = rect.width
+    const height = rect.height
+    const padding = 40
+
+    // Clear canvas
+    ctx.fillStyle = "#000000"
+    ctx.fillRect(0, 0, width, height)
+
+    // Draw grid
+    ctx.strokeStyle = "#003300"
+    ctx.lineWidth = 1
+    
+    // Vertical grid lines
+    for (let i = 0; i <= 10; i++) {
+      const x = padding + (i / 10) * (width - 2 * padding)
+      ctx.beginPath()
+      ctx.moveTo(x, padding)
+      ctx.lineTo(x, height - padding)
+      ctx.stroke()
+    }
+
+    // Horizontal grid lines
+    for (let i = 0; i <= 5; i++) {
+      const y = padding + (i / 5) * (height - 2 * padding)
+      ctx.beginPath()
+      ctx.moveTo(padding, y)
+      ctx.lineTo(width - padding, y)
+      ctx.stroke()
+    }
+
+    if (speedData.length < 2) return
+
+    // Find max values for scaling
+    const maxTime = Math.max(...speedData.map(d => d.time))
+    const maxSpeed = Math.max(...speedData.map(d => d.speed))
+
+    // Draw speed line
+    ctx.strokeStyle = "#00ff41"
+    ctx.lineWidth = 2
+    ctx.beginPath()
+
+    speedData.forEach((point, index) => {
+      const x = padding + (point.time / maxTime) * (width - 2 * padding)
+      const y = height - padding - (point.speed / maxSpeed) * (height - 2 * padding)
+      
+      if (index === 0) {
+        ctx.moveTo(x, y)
+      } else {
+        ctx.lineTo(x, y)
+      }
+    })
+
+    ctx.stroke()
+
+    // Draw labels
+    ctx.fillStyle = "#00ff41"
+    ctx.font = "12px 'Courier New', monospace"
+    
+    // Y-axis labels (speed)
+    for (let i = 0; i <= 5; i++) {
+      const speed = (maxSpeed / 5) * i
+      const y = height - padding - (i / 5) * (height - 2 * padding)
+      ctx.fillText(`${speed.toFixed(0)}`, 5, y + 4)
+    }
+
+    // X-axis labels (time)
+    for (let i = 0; i <= 5; i++) {
+      const time = (maxTime / 5) * i
+      const x = padding + (i / 5) * (width - 2 * padding)
+      ctx.fillText(`${time.toFixed(1)}s`, x - 15, height - 5)
+    }
+
+    // Title
+    ctx.fillText("DOWNLOAD SPEED (MBPS)", width / 2 - 80, 20)
+
+  }, [speedData, showGraph])
 
   // Blinking cursor effect
   useEffect(() => {
@@ -339,7 +470,7 @@ export default function InternetChecker() {
     <div className="min-h-screen flex items-center justify-center p-4">
       {animationEnabled && <canvas ref={canvasRef} className="matrix-bg"></canvas>}
 
-      <div className="w-full max-w-4xl z-10">
+      <div className="w-full max-w-6xl z-10">
         <div className="terminal-container">
           <div className="terminal-header">
             <span className="typing-effect">NETWORK STATUS TERMINAL</span>
@@ -417,6 +548,23 @@ export default function InternetChecker() {
               </button>
             </div>
 
+            {/* Speed Graph */}
+            {showGraph && (
+              <div className="mb-8">
+                <div className="text-lg mb-4 flex items-center">
+                  <TrendingUp className="inline w-4 h-4 mr-2" />
+                  Real-time Speed Graph:
+                </div>
+                <div className="border border-[#333] bg-black/50 p-4">
+                  <canvas 
+                    ref={graphCanvasRef}
+                    className="w-full h-64 border border-[#003300]"
+                    style={{ imageRendering: 'pixelated' }}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Last Checked */}
             {lastChecked && (
               <div className="text-center text-sm opacity-70 mb-6">
@@ -433,8 +581,8 @@ export default function InternetChecker() {
                   <div className="sticky top-0 z-10 bg-black/90 backdrop-blur-sm border-b border-[#333]">
                     <div className="flex opacity-70 p-2 text-[#00ff41] text-xs sm:text-sm">
                       <div className="w-16 sm:w-24 text-left truncate">STATUS</div>
-                      <div className="w-20 sm:w-32 text-left truncate">IP</div>
-                      <div className="flex-1 text-left truncate">TIME</div>
+                      <div className="w-20 sm:w-32 text-left truncate">IP ADDRESS</div>
+                      <div className="flex-1 text-left truncate">TIMESTAMP</div>
                     </div>
                   </div>
                   <div>

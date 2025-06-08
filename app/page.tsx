@@ -46,7 +46,7 @@ export default function InternetChecker() {
   const DOWNLOAD_TEST_URL_BASE = "https://speed.cloudflare.com/__down"
   const NUM_PARALLEL_CONNECTIONS = 6
   const GRAPH_SAMPLE_INTERVAL_MS = 200
-  const TEST_TIMEOUT_SECONDS = 15
+  const TEST_TIMEOUT_SECONDS = 30 // Increased timeout to 30 seconds
 
   const checkConnection = async () => {
     setIsChecking(true)
@@ -136,6 +136,7 @@ export default function InternetChecker() {
     // Test timeout
     const testTimeoutId = setTimeout(() => {
       if (!signal.aborted) {
+        console.log("Speed test timed out after", TEST_TIMEOUT_SECONDS, "seconds")
         abortControllerRef.current?.abort()
         typeText("TEST TIMEOUT")
       }
@@ -192,6 +193,7 @@ export default function InternetChecker() {
         const currentConnectionBytes = bytesPerConnection + (remainingBytes-- > 0 ? 1 : 0)
         const url = `${DOWNLOAD_TEST_URL_BASE}?bytes=${currentConnectionBytes}&_t=${Date.now()}_${i}`
 
+        console.log(`Starting connection ${i + 1} with ${currentConnectionBytes} bytes`)
         downloadPromises.push(
           (async () => {
             try {
@@ -203,16 +205,20 @@ export default function InternetChecker() {
               const reader = response.body?.getReader()
               if (!reader) throw new Error("No reader available")
 
+              let connectionBytesDownloaded = 0
               while (true) {
                 if (signal.aborted) {
+                  console.log(`Connection ${i + 1} aborted after downloading ${connectionBytesDownloaded} bytes`)
                   reader.cancel()
                   break
                 }
                 const { done, value } = await reader.read()
                 if (done) break
 
+                connectionBytesDownloaded += value.length
                 setTotalBytesDownloaded(prev => prev + value.length)
               }
+              console.log(`Connection ${i + 1} completed, downloaded ${connectionBytesDownloaded} bytes`)
             } catch (error) {
               if (error.name !== "AbortError") {
                 console.error(`Connection ${i + 1} failed:`, error)
@@ -223,12 +229,14 @@ export default function InternetChecker() {
         )
       }
 
+      console.log("Waiting for all download connections to complete...")
       await Promise.all(downloadPromises)
       clearTimeout(testTimeoutId)
 
       const finalTime = (performance.now() - overallStartTime) / 1000
       const finalSpeed = (totalBytesDownloaded * 8) / finalTime / (1024 * 1024)
       
+      console.log(`Speed test completed: ${finalSpeed.toFixed(2)} MBPS, ${totalBytesDownloaded} bytes in ${finalTime.toFixed(2)} seconds`)
       setDownloadSpeed(finalSpeed)
       logConnection(currentIP, "speed", undefined, finalSpeed)
       typeText(`${finalSpeed.toFixed(2)} MBPS`)
@@ -237,6 +245,8 @@ export default function InternetChecker() {
       if (error.name !== "AbortError") {
         console.error("Speed test failed:", error)
         typeText("TEST FAILED")
+      } else {
+        console.log("Speed test was aborted")
       }
       clearTimeout(testTimeoutId)
     } finally {

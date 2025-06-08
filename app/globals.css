@@ -1,279 +1,823 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+"use client"
 
-body {
-  font-family: Arial, Helvetica, sans-serif;
+import { useState, useEffect, useRef, useCallback } from "react"
+import { RefreshCw, Clock, Globe, Zap, Activity } from "lucide-react" // Icons
+import * as d3 from "d3" // D3.js for graphing
+
+interface ConnectionLog {
+  ip: string
+  timestamp: string
+  status: "online" | "offline" | "ping" | "speed"
+  pingTime?: number
+  downloadSpeed?: number
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+interface SpeedTestSample {
+  time: number
+  speed: number
 }
 
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
+export default function InternetChecker() {
+  const [isOnline, setIsOnline] = useState<boolean | null>(null)
+  const [isChecking, setIsChecking] = useState(false)
+  const [isPinging, setIsPinging] = useState(false)
+  const [isSpeedTesting, setIsSpeedTesting] = useState(false)
+  const [currentIP, setCurrentIP] = useState<string>("")
+  const [pingTime, setPingTime] = useState<number | null>(null)
+  const [downloadSpeed, setDownloadSpeed] = useState<number | null>(null)
+  const [connectionLogs, setConnectionLogs] = useState<ConnectionLog[]>([])
+  const [lastChecked, setLastChecked] = useState<string>("")
+  const [animationEnabled, setAnimationEnabled] = useState(true)
+  const [statusText, setStatusText] = useState("SYSTEM_READY") // Initial status text
+  const [showCursor, setShowCursor] = useState(true)
+  const [currentStatusType, setCurrentStatusType] = useState<"connection" | "ping" | "speed">("connection")
+
+  // Speed test variables and refs for D3.js
+  const speedTestSamplesRef = useRef<SpeedTestSample[]>([]) // Use ref for accumulating samples without triggering re-renders too often
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const animationFrameRef = useRef<number | null>(null)
+  const overallStartTimeRef = useRef<number>(0) // To store the start time of the test
+
+  // D3.js graph refs
+  const speedGraphContainerRef = useRef<HTMLDivElement>(null)
+  const svgRef = useRef<d3.Selection<SVGSVGElement, unknown, null, undefined> | null>(null)
+  const gRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null)
+  const xScaleRef = useRef<d3.ScaleLinear<number, number> | null>(null)
+  const yScaleRef = useRef<d3.ScaleLinear<number, number> | null>(null)
+  const linePathRef = useRef<d3.Selection<SVGPathElement, unknown, null, undefined> | null>(null)
+  const xAxisGRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null)
+  const yAxisGRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null)
+
+  // Speed test parameters (aligned with Canvas version)
+  const DOWNLOAD_FILE_SIZE_BYTES = 1000 * 1024 * 1024 // 1 GB (target)
+  const DOWNLOAD_TEST_URL_BASE = "https://speed.cloudflare.com/__down"
+  const NUM_PARALLEL_CONNECTIONS = 8 // Aligned with Canvas version
+  const GRAPH_SAMPLE_INTERVAL_MS = 200 // How often to collect data and update the graph (in milliseconds)
+  const TEST_TIMEOUT_SECONDS = 20 // Aligned with Canvas version (20 seconds)
+
+  // --- Utility Functions ---
+
+  // Function to show a custom message box (terminal style)
+  const showMessageBox = useCallback((message: string) => {
+    const modal = document.createElement("div")
+    modal.className = "fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50"
+    modal.innerHTML = `
+      <div class="bg-black p-8 border border-green-500 rounded-none text-center max-w-sm mx-auto text-green-500 font-mono">
+        <p class="text-lg font-semibold mb-4">${message}</p>
+        <button class="bg-green-500 text-black px-6 py-2 border border-green-500 hover:bg-green-700 transition" onclick="this.parentNode.parentNode.remove()">ACKNOWLEDGE</button>
+      </div>
+    `
+    document.body.appendChild(modal)
+  }, [])
+
+  // Clear results and reset UI state
+  const clearResults = useCallback(() => {
+    setPingTime(null)
+    setDownloadSpeed(null)
+    setStatusText("SYSTEM_READY")
+    speedTestSamplesRef.current = [] // Clear samples directly
+
+    // Clear D3 graph elements
+    if (svgRef.current) {
+      svgRef.current.remove()
+      svgRef.current = null
+      gRef.current = null
+      xScaleRef.current = null
+      yScaleRef.current = null
+      linePathRef.current = null
+      xAxisGRef.current = null
+      yAxisGRef.current = null
+    }
+
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
+  }, [])
+
+  const logConnection = useCallback((ip: string, status: "online" | "offline" | "ping" | "speed", pingMs?: number | null, speedMbps?: number) => {
+    const newLog: ConnectionLog = {
+      ip,
+      timestamp: new Date().toLocaleString(),
+      status,
+      pingTime: pingMs || undefined,
+      downloadSpeed: speedMbps || undefined,
+    }
+
+    setConnectionLogs((prev) => {
+      const updated = [newLog, ...prev].slice(0, 20) // Keep last 20 logs
+      if (typeof window !== 'undefined') { // Check if window is defined (client-side)
+        localStorage.setItem("connectionLogs", JSON.stringify(updated))
+      }
+      return updated
+    })
+  }, [])
+
+  // --- Network Checks ---
+
+  const checkConnection = useCallback(async () => {
+    setIsChecking(true)
+    setCurrentStatusType("connection")
+
+    try {
+      const ipResponse = await fetch("https://api.ipify.org?format=json", {
+        cache: "no-cache",
+      })
+
+      if (ipResponse.ok) {
+        const ipData = await ipResponse.json()
+        setIsOnline(true)
+        setCurrentIP(ipData.ip)
+        logConnection(ipData.ip, "online")
+        setStatusText("CONNECTED")
+      } else {
+        throw new Error("Connection failed")
+      }
+    } catch (error) {
+      setIsOnline(false)
+      setCurrentIP("Unable to retrieve")
+      logConnection("Unable to retrieve", "offline")
+      setStatusText("DISCONNECTED")
+    } finally {
+      setIsChecking(false)
+      setLastChecked(new Date().toLocaleString())
+    }
+  }, [logConnection])
+
+  const checkPing = useCallback(async () => {
+    setIsPinging(true)
+    setCurrentStatusType("ping")
+    setPingTime(null)
+    setStatusText("EXECUTING_LATENCY_TEST...")
+
+    try {
+      const startTime = performance.now()
+      const endpoint = "https://speed.cloudflare.com/__down?bytes=1" // Small file for ping
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 sec timeout for ping
+
+      const response = await fetch(endpoint, {
+        method: "HEAD", // HEAD request is sufficient for ping
+        cache: "no-cache",
+        mode: "cors",
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId) // Clear timeout if fetch completes in time
+
+      const endTime = performance.now()
+      const pingTime = Math.round(endTime - startTime)
+
+      if (response.ok) {
+        setPingTime(pingTime)
+        logConnection(currentIP, "ping", pingTime)
+        setStatusText(`PING_RESULT: ${pingTime}MS`)
+      } else {
+        throw new Error(`Ping failed with status: ${response.status}`)
+      }
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        setPingTime(null);
+        setStatusText("PING_TIMEOUT");
+        showMessageBox("LATENCY_TEST_TIMED_OUT. CHECK_NETWORK_CONNECTION.");
+      } else {
+        console.error("Ping test failed:", error)
+        setPingTime(null)
+        logConnection(currentIP, "ping", null)
+        setStatusText("PING_FAILED")
+        showMessageBox("LATENCY_TEST_FAILED. CHECK_NETWORK_CONNECTION_OR_CONSOLE_LOG.");
+      }
+    } finally {
+      setIsPinging(false)
+    }
+  }, [currentIP, logConnection, showMessageBox])
+
+  // --- Speed Test Logic ---
+
+  const runSpeedTest = useCallback(async () => {
+    if (!isOnline) {
+      setStatusText("NO_CONNECTION_DETECTED")
+      showMessageBox("NO_CONNECTION_DETECTED. PLEASE_CHECK_YOUR_NETWORK.")
+      return
+    }
+
+    setIsSpeedTesting(true)
+    setCurrentStatusType("speed")
+    setDownloadSpeed(0) // Initialize to 0 for real-time display
+    speedTestSamplesRef.current = [] // Clear previous samples for new test
+    overallStartTimeRef.current = performance.now()
+
+    // Initialize D3 graph elements before starting the test
+    initializeSpeedGraph()
+
+    let totalBytesDownloadedAcc = 0 // Accumulator for bytes across all connections
+    let lastGraphUpdateTime = overallStartTimeRef.current // For throttling graph updates
+
+    // Setup abort controller for the download test
+    abortControllerRef.current = new AbortController()
+    const signal = abortControllerRef.current.signal
+
+    // Set up the overall test timeout
+    const testTimeoutId = setTimeout(() => {
+      if (!signal.aborted) {
+        console.warn(`Test timed out after ${TEST_TIMEOUT_SECONDS} seconds.`)
+        abortControllerRef.current?.abort() // Abort all ongoing fetches
+        setStatusText(`TEST_ABORTED: MAX_TIME_REACHED (${TEST_TIMEOUT_SECONDS}s).`)
+      }
+    }, TEST_TIMEOUT_SECONDS * 1000)
+
+    // Function to update UI and graph (called via requestAnimationFrame)
+    const updateUIAndGraph = () => {
+      const currentTime = performance.now()
+      const elapsedTimeFromStart = (currentTime - overallStartTimeRef.current) / 1000 // Total elapsed time in seconds
+
+      // Update real-time CUMULATIVE AVERAGE speed display
+      if (elapsedTimeFromStart > 0) {
+        const currentOverallAvgSpeedMbps = (totalBytesDownloadedAcc * 8) / elapsedTimeFromStart / (1024 * 1024)
+        setDownloadSpeed(currentOverallAvgSpeedMbps)
+      } else {
+        setDownloadSpeed(0)
+      }
+
+      // Collect data for graph (cumulative average speed) and redraw if enough time has passed
+      if (currentTime - lastGraphUpdateTime >= GRAPH_SAMPLE_INTERVAL_MS) {
+        const currentOverallAvgSpeedMbps = (totalBytesDownloadedAcc * 8) / elapsedTimeFromStart / (1024 * 1024)
+        speedTestSamplesRef.current.push({
+          time: elapsedTimeFromStart,
+          speed: currentOverallAvgSpeedMbps
+        })
+
+        // Draw graph with smooth transition
+        drawSpeedGraph(speedTestSamplesRef.current, elapsedTimeFromStart)
+        lastGraphUpdateTime = currentTime
+      }
+
+      const progressPercent = Math.min(Math.max((totalBytesDownloadedAcc / DOWNLOAD_FILE_SIZE_BYTES) * 100, 0), 100);
+      setStatusText(`DOWNLOAD_PROGRESS: ${progressPercent.toFixed(1)}%`);
+
+      // Continue animation loop if test is not yet complete AND not aborted
+      if (totalBytesDownloadedAcc < DOWNLOAD_FILE_SIZE_BYTES && !signal.aborted) {
+        animationFrameRef.current = requestAnimationFrame(updateUIAndGraph)
+      } else {
+        // Test completed or aborted, ensure final cleanup
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current)
+          animationFrameRef.current = null
+        }
+        clearTimeout(testTimeoutId) // Clear timeout if test finished naturally or was aborted internally
+      }
+    }
+
+    // Start the animation frame loop
+    animationFrameRef.current = requestAnimationFrame(updateUIAndGraph)
+
+    try {
+      const downloadPromises = []
+      const bytesPerConnection = Math.floor(DOWNLOAD_FILE_SIZE_BYTES / NUM_PARALLEL_CONNECTIONS)
+      let remainingBytes = DOWNLOAD_FILE_SIZE_BYTES % NUM_PARALLEL_CONNECTIONS
+
+      for (let i = 0; i < NUM_PARALLEL_CONNECTIONS; i++) {
+        const currentConnectionBytes = bytesPerConnection + (remainingBytes-- > 0 ? 1 : 0)
+        const url = `${DOWNLOAD_TEST_URL_BASE}?bytes=${currentConnectionBytes}&_t=${Date.now()}_${i}` // Add random param to prevent caching
+
+        downloadPromises.push(
+          (async () => {
+            try {
+              const response = await fetch(url, { cache: "no-store", signal: signal })
+              if (!response.ok) {
+                throw new Error(`HTTP_ERROR!_STATUS:_${response.status}_FROM_CONNECTION_${i+1}`)
+              }
+
+              const reader = response.body?.getReader()
+              if (!reader) throw new Error("No reader available")
+
+              while (true) {
+                if (signal.aborted) {
+                  reader.cancel() // Cancel the reader to release resources
+                  break
+                }
+                const { done, value } = await reader.read()
+                if (done) break
+
+                // Update the shared accumulator directly
+                totalBytesDownloadedAcc += value.length
+              }
+            } catch (error: any) {
+              if (error.name === "AbortError") {
+                console.warn(`Download connection ${i+1} aborted.`)
+              } else {
+                console.error(`Download_CONNECTION_${i+1}_FAILED:`, error)
+                throw error // Re-throw other errors to be caught by Promise.all
+              }
+            }
+          })()
+        )
+      }
+
+      // Wait for all parallel download promises to resolve (or reject/abort)
+      await Promise.all(downloadPromises)
+
+      // Ensure final cleanup if Promise.all completes before timeout triggers
+      clearTimeout(testTimeoutId)
+
+      // Final calculation and display after all downloads complete or aborted
+      const finalTime = (performance.now() - overallStartTimeRef.current) / 1000
+      let finalOverallAvgSpeedMbps = 0
+      if (finalTime > 0) {
+        finalOverallAvgSpeedMbps = (totalBytesDownloadedAcc * 8) / finalTime / (1024 * 1024)
+      }
+
+      // Add a final point for the graph representing the final overall average
+      speedTestSamplesRef.current.push({ time: finalTime, speed: finalOverallAvgSpeedMbps })
+      drawSpeedGraph(speedTestSamplesRef.current, finalTime) // Final draw after test finishes
+
+      if (totalBytesDownloadedAcc === 0) {
+        setStatusText("ERROR: NO_DATA_RECEIVED")
+        showMessageBox("DOWNLOAD_TEST_FAILED: NO_DATA_RECEIVED. RETRY_TEST.")
+      } else {
+        setDownloadSpeed(finalOverallAvgSpeedMbps)
+        logConnection(currentIP, "speed", undefined, finalOverallAvgSpeedMbps)
+        setStatusText(`TEST_COMPLETE. AVG_SPEED: ${finalOverallAvgSpeedMbps.toFixed(2)} MBPS.`)
+      }
+
+    } catch (error: any) {
+      if (error.name !== "AbortError") {
+        console.error("OVERALL_DOWNLOAD_TEST_FAILED:", error)
+        setStatusText("DOWNLOAD_TEST_ERROR")
+        showMessageBox("DOWNLOAD_TEST_FAILED_DUE_TO_CONNECTION_FAILURE. CHECK_CONSOLE_FOR_DETAILS.");
+      }
+    } finally {
+      setIsSpeedTesting(false)
+      // Any remaining animation frames will be cancelled by the updateUIAndGraph loop itself
+      // The timeoutId is also cleared within updateUIAndGraph or after Promise.all
+    }
+  }, [isOnline, logConnection, currentIP, showMessageBox])
+
+  // --- D3.js Graphing Functions ---
+
+  // Initializes the SVG and D3 elements for the graph
+  const initializeSpeedGraph = useCallback(() => {
+    if (!speedGraphContainerRef.current) return
+
+    // Clear existing graph SVG
+    d3.select(speedGraphContainerRef.current).select("svg").remove()
+
+    const containerWidth = speedGraphContainerRef.current.clientWidth
+    const containerHeight = 200 // Fixed height for graph
+    const margin = { top: 20, right: 30, bottom: 40, left: 60 }
+    const width = containerWidth - margin.left - margin.right
+    const height = containerHeight - margin.top - margin.bottom
+
+    const newSvg = d3.select(speedGraphContainerRef.current)
+      .append("svg")
+      .attr("width", containerWidth)
+      .attr("height", containerHeight)
+
+    // Store the SVG and main group ref
+    svgRef.current = newSvg
+    gRef.current = newSvg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`)
+
+    // Initial scales
+    xScaleRef.current = d3.scaleLinear().range([0, width])
+    yScaleRef.current = d3.scaleLinear().range([height, 0])
+
+    // Add axes groups and store refs
+    xAxisGRef.current = gRef.current.append("g")
+      .attr("class", "x-axis")
+      .attr("transform", `translate(0,${height})`)
+
+    yAxisGRef.current = gRef.current.append("g")
+      .attr("class", "y-axis")
+
+    // Add axis labels
+    gRef.current.append("text")
+      .attr("class", "axis-label")
+      .attr("x", width / 2)
+      .attr("y", height + margin.bottom - 5)
+      .attr("text-anchor", "middle")
+      .style("fill", "#00ff00")
+      .style("font-family", "Roboto Mono, monospace")
+      .style("font-size", "0.75rem")
+      .text("TIME (SECONDS)")
+
+    gRef.current.append("text")
+      .attr("class", "axis-label")
+      .attr("transform", "rotate(-90)")
+      .attr("y", -margin.left + 15)
+      .attr("x", -height / 2)
+      .attr("text-anchor", "middle")
+      .style("fill", "#00ff00")
+      .style("font-family", "Roboto Mono, monospace")
+      .style("font-size", "0.75rem")
+      .text("SPEED (MBPS)")
+
+    // Add the line path (initially empty) and store ref
+    linePathRef.current = gRef.current.append("path")
+      .attr("class", "line")
+      .style("fill", "none")
+      .style("stroke", "#00ff00")
+      .style("stroke-width", "2px")
+  }, [])
+
+  // Draws/Updates the graph with new data
+  const drawSpeedGraph = useCallback((data: SpeedTestSample[], currentMaxTime: number) => {
+    // Ensure all D3 elements are initialized
+    if (!gRef.current || !xScaleRef.current || !yScaleRef.current || !linePathRef.current || !xAxisGRef.current || !yAxisGRef.current || data.length === 0) {
+      if (data.length === 0) {
+        // Optionally display "NO DATA" message if component is rendered but no data
+        const container = speedGraphContainerRef.current;
+        if(container && !container.querySelector('.no-data-message')) {
+            const noDataMessage = document.createElement('div');
+            noDataMessage.className = 'no-data-message absolute inset-0 flex items-center justify-center text-[#00ff00] opacity-70 text-sm font-mono';
+            noDataMessage.innerText = 'NO DATA TO DISPLAY';
+            container.appendChild(noDataMessage);
+        }
+      }
+      return;
+    }
+    // Remove any previous "NO DATA" message
+    d3.select(speedGraphContainerRef.current).select('.no-data-message').remove();
+
+
+    const width = gRef.current.node()?.parentElement?.clientWidth ? gRef.current.node()!.parentElement!.clientWidth - margin.left - margin.right : 0;
+    const height = gRef.current.node()?.parentElement?.clientHeight ? gRef.current.node()!.parentElement!.clientHeight - margin.top - margin.bottom : 0;
+
+    // Update scales domains and ranges (important for responsiveness)
+    xScaleRef.current.domain([0, Math.max(currentMaxTime, TEST_TIMEOUT_SECONDS * 1.05)]).range([0, width]); // Ensure x-axis scales with time or timeout
+    yScaleRef.current.domain([0, (d3.max(data, d => d.speed) || 0) * 1.2]).range([height, 0]);
+
+    // Define the line generator
+    const lineGenerator = d3.line<SpeedTestSample>()
+      .x(d => xScaleRef.current!(d.time))
+      .y(d => yScaleRef.current!(d.speed))
+      .curve(d3.curveMonotoneX) // Smooth curve
+
+    // Update the line path with transition
+    linePathRef.current.datum(data)
+      .transition()
+      .duration(GRAPH_SAMPLE_INTERVAL_MS * 0.8) // Smooth transition based on sample interval
+      .ease(d3.easeLinear) // Linear ease for consistent speed
+      .attr("d", lineGenerator)
+
+    // Update axes with transitions
+    xAxisGRef.current
+      .transition()
+      .duration(GRAPH_SAMPLE_INTERVAL_MS * 0.8)
+      .ease(d3.easeLinear)
+      .call(d3.axisBottom(xScaleRef.current).ticks(5).tickFormat(d => `${d.toFixed(0)}s`))
+      .selectAll("text")
+      .style("fill", "#00cc00")
+      .style("font-family", "Roboto Mono, monospace")
+      .style("font-size", "0.75rem")
+
+    yAxisGRef.current
+      .transition()
+      .duration(GRAPH_SAMPLE_INTERVAL_MS * 0.8)
+      .ease(d3.easeLinear)
+      .call(d3.axisLeft(yScaleRef.current).ticks(5).tickFormat(d => `${d.toFixed(0)} MBPS`))
+      .selectAll("text")
+      .style("fill", "#00cc00")
+      .style("font-family", "Roboto Mono, monospace")
+      .style("font-size", "0.75rem")
+
+    // Update axis label positions manually after transitions
+    svgRef.current?.select(".axis-label[text='TIME (SECONDS)']")
+        .attr("x", width / 2)
+        .attr("y", height + margin.bottom - 5);
+    svgRef.current?.select(".axis-label[text='SPEED (MBPS)']")
+        .attr("y", -margin.left + 15)
+        .attr("x", -height / 2);
+
+  }, []) // No dependencies here because it uses refs, not state directly.
+
+  // --- Effects for Lifecycle and UI ---
+
+  // Blinking cursor effect
+  useEffect(() => {
+    const cursorInterval = setInterval(() => {
+      setShowCursor((prev) => !prev)
+    }, 800)
+
+    return () => clearInterval(cursorInterval)
+  }, [])
+
+  // Matrix digital rain effect (background)
+  useEffect(() => {
+    if (!animationEnabled || typeof window === 'undefined') return
+
+    const canvas = document.createElement('canvas') // Create canvas dynamically
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.zIndex = '0'; // Ensure it's behind other content
+    document.body.appendChild(canvas); // Append to body
+
+    const resizeCanvas = () => {
+      canvas.width = window.innerWidth
+      canvas.height = window.innerHeight
+    }
+
+    resizeCanvas() // Initial resize
+    window.addEventListener("resize", resizeCanvas)
+
+    const matrixChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$#@%&*()_+-=[]{}|;:,.<>/?~"
+    const fontSize = 14
+    const columns = canvas.width / fontSize
+
+    const drops: number[] = []
+    for (let i = 0; i < columns; i++) {
+      drops[i] = Math.floor(Math.random() * canvas.height / fontSize) * -1 // Start off-screen
+    }
+
+    const drawMatrix = () => {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.05)"
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+      ctx.fillStyle = "#00ff41"
+      ctx.font = `${fontSize}px "Roboto Mono", monospace` // Use Roboto Mono
+
+      for (let i = 0; i < drops.length; i++) {
+        const text = matrixChars.charAt(Math.floor(Math.random() * matrixChars.length))
+        ctx.fillText(text, i * fontSize, drops[i] * fontSize)
+
+        if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+          drops[i] = 0 // Reset to top
+        }
+        drops[i]++
+      }
+    }
+
+    const matrixInterval = setInterval(drawMatrix, 50)
+
+    return () => {
+      clearInterval(matrixInterval)
+      window.removeEventListener("resize", resizeCanvas)
+      canvas.remove(); // Clean up canvas element
+    }
+  }, [animationEnabled]) // Re-run effect if animationEnabled changes
+
+  // Initial load and network listeners
+  useEffect(() => {
+    // Load preferences
+    if (typeof window !== 'undefined') {
+      const savedAnimation = localStorage.getItem("animationEnabled")
+      if (savedAnimation !== null) {
+        setAnimationEnabled(JSON.parse(savedAnimation))
+      }
+      // Load logs from localStorage
+      const savedLogs = localStorage.getItem("connectionLogs")
+      if (savedLogs) {
+        setConnectionLogs(JSON.parse(savedLogs))
+      }
+    }
+
+    checkConnection()
+
+    const handleOnline = () => checkConnection()
+    const handleOffline = () => {
+      setIsOnline(false)
+      setCurrentIP("")
+      logConnection("Unknown", "offline")
+      setLastChecked(new Date().toLocaleString())
+      setStatusText("DISCONNECTED")
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener("online", handleOnline)
+      window.addEventListener("offline", handleOffline)
+    }
+
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener("online", handleOnline)
+        window.removeEventListener("offline", handleOffline)
+      }
+    }
+  }, [checkConnection, logConnection]) // Dependencies for useEffect
+
+  // Effect for responsive graph resizing
+  useEffect(() => {
+    const handleResize = () => {
+      if (speedGraphContainerRef.current && svgRef.current && xScaleRef.current && yScaleRef.current && gRef.current) {
+        const containerWidth = speedGraphContainerRef.current.clientWidth;
+        const containerHeight = 200; // Keep consistent height
+        const width = containerWidth - margin.left - margin.right;
+        const height = containerHeight - margin.top - margin.bottom;
+
+        // Update SVG dimensions
+        svgRef.current.attr("width", containerWidth).attr("height", containerHeight);
+        gRef.current.attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // Update scales' ranges
+        xScaleRef.current.range([0, width]);
+        yScaleRef.current.range([height, 0]);
+
+        // Redraw content with new scales (no animation on resize, to prevent flickering)
+        drawSpeedGraph(speedTestSamplesRef.current, speedTestSamplesRef.current.length > 0 ? speedTestSamplesRef.current[speedTestSamplesRef.current.length - 1].time : 0);
+
+        // Update axis groups
+        if(xAxisGRef.current) xAxisGRef.current.attr("transform", `translate(0,${height})`);
+        if(yAxisGRef.current) yAxisGRef.current.call(d3.axisLeft(yScaleRef.current).ticks(5).tickFormat(d => `${d.toFixed(0)} MBPS`));
+
+        // Update axis labels positions
+        svgRef.current.select(".axis-label[text='TIME (SECONDS)']")
+            .attr("x", width / 2)
+            .attr("y", height + margin.bottom - 5);
+        svgRef.current.select(".axis-label[text='SPEED (MBPS)']")
+            .attr("y", -margin.left + 15)
+            .attr("x", -height / 2);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', handleResize);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('resize', handleResize);
+      }
+    };
+  }, [drawSpeedGraph]);
+
+
+  // --- UI Formatting Helpers ---
+
+  const formatDateTime = useCallback((timestamp: string) => {
+    const date = new Date(timestamp)
+    const dateStr = date.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit" })
+    const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    return `${dateStr} ${timeStr}`
+  }, [])
+
+  const getStatusColor = useCallback((logType: "connection" | "ping" | "speed") => {
+    if (logType === "ping" && pingTime !== null) {
+      if (pingTime < 100) return "text-[#00ff00]" // Green
+      if (pingTime < 200) return "text-yellow-400" // Yellowish-orange for higher ping
+      return "text-red-500" // Red for high ping
+    }
+    if (logType === "speed" && downloadSpeed !== null) {
+      if (downloadSpeed > 100) return "text-[#00ff00]" // Green
+      if (downloadSpeed > 50) return "text-yellow-400" // Yellowish-orange
+      return "text-red-500" // Red for low speed
+    }
+    return isOnline ? "text-[#00ff00]" : "text-red-500" // Connection status
+  }, [isOnline, pingTime, downloadSpeed])
+
+  const getLogStatusDisplay = useCallback((log: ConnectionLog) => {
+    if (log.status === "ping") {
+      return log.pingTime ? `${log.pingTime}MS` : "PING FAIL"
+    }
+    if (log.status === "speed") {
+      return log.downloadSpeed ? `${log.downloadSpeed.toFixed(2)} MBPS` : "SPEED FAIL"
+    }
+    return log.status === "online" ? "ONLINE" : "OFFLINE"
+  }, [])
+
+  const getLogStatusColor = useCallback((log: ConnectionLog) => {
+    if (log.status === "ping") {
+      if (!log.pingTime) return "text-red-500"
+      if (log.pingTime < 100) return "text-[#00ff00]"
+      if (log.pingTime < 200) return "text-yellow-400"
+      return "text-red-500"
+    }
+    if (log.status === "speed") {
+      if (!log.downloadSpeed) return "text-red-500"
+      if (log.downloadSpeed > 100) return "text-[#00ff00]"
+      if (log.downloadSpeed > 50) return "text-yellow-400"
+      return "text-red-500"
+    }
+    return log.status === "online" ? "text-[#00ff00]" : "text-red-500"
+  }, [])
+
+  // --- JSX Render ---
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[#0d1117] text-[#00ff00]">
+      {/* Matrix background handled by a separate useEffect creating its own canvas */}
+
+      <div className="w-full max-w-4xl z-10">
+        <div className="container">
+          {/* Removed terminal-header as per user request */}
+
+          <div className="terminal-content p-6">
+            {/* Prompt and Initiate Button */}
+            <div className="result-line">
+              <span className="result-label" style={{ width: 'auto' }}>PROMPT></span>
+              <button
+                id="startButton"
+                onClick={async () => {
+                  clearResults(); // Clear before new test
+                  await checkConnection(); // Ensure connection is checked first
+                  await checkPing();
+                  await runSpeedTest();
+                }}
+                disabled={isChecking || isPinging || isSpeedTesting}
+                className="inline-block bg-none border-none text-current font-bold cursor-pointer p-0 m-0 text-[1.1rem] relative z-20 whitespace-nowrap leading-inherit"
+                style={{
+                  transition: 'color 0.1s ease-in-out',
+                  color: (isChecking || isPinging || isSpeedTesting) ? '#006600' : '#00ff00', // Dimmer green when disabled
+                }}
+              >
+                INITIATE_TEST
+              </button>
+            </div>
+
+            {/* Status Display */}
+            <div className="result-line">
+              <span className="result-label">STATUS></span>
+              <span id="statusMessage" className={getStatusColor(currentStatusType)}>
+                {statusText}
+                {/* Blinking cursor only visible when button is enabled */}
+                {!(isChecking || isPinging || isSpeedTesting) && showCursor && "_"}
+              </span>
+            </div>
+
+            {/* Ping Result */}
+            <div className="result-line">
+              <span className="result-label">PING></span>
+              <span id="latencyResult" className={getStatusColor("ping")}>
+                {pingTime !== null ? `${pingTime} MS` : "- MS"}
+              </span>
+            </div>
+
+            {/* Download Speed Result */}
+            <div className="result-line">
+              <span className="result-label">DL_SPEED></span>
+              <span id="downloadResult" className={getStatusColor("speed")}>
+                {downloadSpeed !== null ? `${downloadSpeed.toFixed(2)} MBPS (AVG)` : "- MBPS"}
+              </span>
+            </div>
+
+            {/* Loading Spinner */}
+            {(isChecking || isPinging || isSpeedTesting) && (
+              <div className="loading-spinner mx-auto mt-4"></div>
+            )}
+
+            {/* Speed Test Graph Container */}
+            <div
+              ref={speedGraphContainerRef}
+              id="speedGraph"
+              className="mt-8 bg-black border border-[#00cc00] p-4 w-full relative"
+              style={{ height: '200px' }} // Fixed height for graph
+            >
+              {speedTestSamplesRef.current.length === 0 && !isSpeedTesting && (
+                <div className="no-data-message absolute inset-0 flex items-center justify-center text-[#00ff00] opacity-70 text-sm font-mono">
+                  NO DATA TO DISPLAY
+                </div>
+              )}
+              {/* D3.js will render the SVG graph here */}
+            </div>
+
+            {/* Last Checked */}
+            {lastChecked && (
+              <div className="result-line mt-6 text-sm opacity-70">
+                <span className="result-label">LAST_CHECKED></span>
+                <span className="result-value">{lastChecked}</span>
+              </div>
+            )}
+
+            {/* Connection History */}
+            {connectionLogs.length > 0 && (
+              <div className="mt-8">
+                <div className="text-lg mb-4 text-[#00ff00]">TELEMETRY_DATA:</div>
+                <div className="font-mono text-sm max-h-60 overflow-y-auto border border-[#006600] bg-black">
+                  <div className="sticky top-0 z-10 bg-black border-b border-[#006600] py-2">
+                    <div className="flex text-[#00ff00] text-xs sm:text-sm px-2">
+                      <div className="w-16 sm:w-24 text-left truncate">STATUS</div>
+                      <div className="w-20 sm:w-32 text-left truncate">IP_ADDRESS</div>
+                      <div className="flex-1 text-left truncate">TIMESTAMP</div>
+                    </div>
+                  </div>
+                  <div>
+                    {connectionLogs.map((log, index) => (
+                      <div key={index} className={`flex p-2 text-xs sm:text-sm ${getLogStatusColor(log)} hover:bg-[#001100] transition-colors border-b border-dashed border-[#003300]`}>
+                        <div className="w-16 sm:w-24 truncate">{getLogStatusDisplay(log)}</div>
+                        <div className="w-20 sm:w-32 truncate" title={log.ip}>{log.ip}</div>
+                        <div className="flex-1 truncate" title={formatDateTime(log.timestamp)}>{formatDateTime(log.timestamp)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Settings at Bottom */}
+            <div className="mt-8 text-center">
+              <button onClick={toggleAnimation} className="inline-block bg-none border-none text-[#00ff00] font-bold cursor-pointer p-0 m-0 text-[1.1rem] relative z-20 whitespace-nowrap leading-inherit">
+                {animationEnabled ? "MATRIX_ANIMATION_DISABLED" : "MATRIX_ANIMATION_ENABLED"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-}
-
-/* Terminal styling */
-.matrix-bg {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: -1;
-  background: #000;
-}
-
-.terminal-container {
-  background: rgba(0, 0, 0, 0.9);
-  border: 2px solid #00ff41;
-  border-radius: 0;
-  box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
-  backdrop-filter: blur(10px);
-}
-
-.terminal-header {
-  background: #00ff41;
-  color: #000;
-  padding: 8px 16px;
-  font-family: "Courier New", Monaco, "Lucida Console", monospace;
-  font-weight: bold;
-  text-align: center;
-  border-bottom: 2px solid #00ff41;
-}
-
-.terminal-content {
-  color: #00ff41;
-  font-family: "Courier New", Monaco, "Lucida Console", monospace;
-  background: rgba(0, 0, 0, 0.8);
-}
-
-.terminal-button {
-  background: transparent;
-  border: 2px solid #00ff41;
-  color: #00ff41;
-  padding: 12px 24px;
-  font-family: "Courier New", Monaco, "Lucida Console", monospace;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.terminal-button:hover:not(:disabled) {
-  background: #00ff41;
-  color: #000;
-  box-shadow: 0 0 15px rgba(0, 255, 65, 0.5);
-}
-
-.terminal-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.pulse-sonar {
-  animation: pulse-sonar 1.5s infinite;
-}
-
-@keyframes pulse-sonar {
-  0% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: 0.7;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-.cursor-blink {
-  animation: blink 1s infinite;
-}
-
-@keyframes blink {
-  0%, 50% {
-    opacity: 1;
-  }
-  51%, 100% {
-    opacity: 0;
-  }
-}
-
-.typing-effect {
-  overflow: hidden;
-  white-space: nowrap;
-  animation: typing 2s steps(40, end);
-}
-
-@keyframes typing {
-  from {
-    width: 0;
-  }
-  to {
-    width: 100%;
-  }
-}
-
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-
-/* Additional terminal styles for the enhanced version */
-.result-line {
-  display: flex;
-  align-items: center;
-  margin-bottom: 0.75rem;
-  font-family: "Roboto Mono", "Courier New", Monaco, "Lucida Console", monospace;
-  font-size: 1.1rem;
-  line-height: 1.4;
-}
-
-.result-label {
-  color: #00ff00;
-  font-weight: bold;
-  width: 120px;
-  flex-shrink: 0;
-  text-align: left;
-  margin-right: 1rem;
-}
-
-.result-value {
-  color: #00ff00;
-  font-weight: normal;
-}
-
-.container {
-  background: rgba(0, 0, 0, 0.95);
-  border: 2px solid #00cc00;
-  border-radius: 0;
-  box-shadow: 
-    0 0 20px rgba(0, 255, 0, 0.3),
-    inset 0 0 20px rgba(0, 255, 0, 0.1);
-  backdrop-filter: blur(10px);
-  position: relative;
-  overflow: hidden;
-}
-
-.terminal-content {
-  color: #00ff00;
-  font-family: "Roboto Mono", "Courier New", Monaco, "Lucida Console", monospace;
-  background: transparent;
-  position: relative;
-  z-index: 1;
-}
-
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(0, 255, 0, 0.3);
-  border-top: 3px solid #00ff00;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* Matrix background effect */
-.matrix-bg {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: -1;
-  background: #000;
-  pointer-events: none;
-}

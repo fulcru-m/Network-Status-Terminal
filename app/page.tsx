@@ -109,8 +109,8 @@ export default function InternetChecker() {
       const pingResults: number[] = []
       const totalPings = 5
       
-      // Update status to show progress
-      typeText("PINGING...")
+      // Set initial status without typing animation during ping test
+      setStatusText("PINGING...")
       
       // Perform 5 ping tests
       for (let i = 0; i < totalPings; i++) {
@@ -126,8 +126,8 @@ export default function InternetChecker() {
           
           if (response.ok) {
             pingResults.push(pingTime)
-            // Update status to show progress
-            typeText(`PING ${i + 1}/5: ${pingTime}ms`)
+            // Update status to show progress without typing animation
+            setStatusText(`PING ${i + 1}/5: ${pingTime}ms`)
             
             // Small delay between pings to avoid overwhelming the server
             if (i < totalPings - 1) {
@@ -152,9 +152,9 @@ export default function InternetChecker() {
         
         // Show detailed results
         if (pingResults.length === totalPings) {
-          typeText(`AVG: ${averagePing}ms (${minPing}-${maxPing}ms)`)
+          setStatusText(`AVG: ${averagePing}ms (${minPing}-${maxPing}ms)`)
         } else {
-          typeText(`AVG: ${averagePing}ms (${pingResults.length}/${totalPings} OK)`)
+          setStatusText(`AVG: ${averagePing}ms (${pingResults.length}/${totalPings} OK)`)
         }
       } else {
         throw new Error("All pings failed")
@@ -162,7 +162,7 @@ export default function InternetChecker() {
     } catch (error) {
       console.log("Ping failed, might be offline")
       logConnection(currentIP, "ping", null)
-      typeText("PING FAILED")
+      setStatusText("PING FAILED")
     }
 
     // Ensure minimum 3-second animation

@@ -61,24 +61,25 @@ export default function InternetChecker() {
     }
 
     try {
-      const ipResponse = await fetch("/api/check-connection", {
+      // Fetch user's actual public IP directly from ipify.org
+      const ipResponse = await fetch("https://api.ipify.org?format=json", {
         cache: "no-cache",
       })
 
       if (ipResponse.ok) {
         const ipData = await ipResponse.json()
-        setIsOnline(ipData.status === "online")
+        setIsOnline(true)
         setCurrentIP(ipData.ip)
-        logConnection(ipData.ip, ipData.status === "online" ? "online" : "offline")
-        typeText(ipData.status === "online" ? "CONNECTED" : "OFFLINE MODE")
+        logConnection(ipData.ip, "online")
+        typeText("CONNECTED")
       } else {
         throw new Error("Connection failed")
       }
     } catch (error) {
-      console.log("Connection check failed, checking if we're in offline mode")
+      console.log("IP fetch failed - likely offline or network issue:", error)
       setIsOnline(false)
-      setCurrentIP("Unable to retrieve")
-      logConnection("Unable to retrieve", "offline")
+      setCurrentIP("")
+      logConnection("Offline", "offline")
       typeText("OFFLINE MODE")
     }
 

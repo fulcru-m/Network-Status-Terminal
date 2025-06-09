@@ -641,9 +641,9 @@ export default function InternetChecker() {
     const handleOffline = () => {
       setIsOnline(false)
       setCurrentIP("")
-      logConnection("Offline", "offline")
+      logConnection("Offline", "n/a")
       setLastChecked(new Date().toLocaleString())
-      typeText("OFFLINE MODE")
+      typeText("OFFLINE")
     }
 
     window.addEventListener("online", handleOnline)

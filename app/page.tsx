@@ -61,24 +61,25 @@ export default function InternetChecker() {
     }
 
     try {
-      const ipResponse = await fetch("https://api.ipify.org?format=json", {
+      const ipResponse = await fetch("/api/check-connection", {
         cache: "no-cache",
       })
 
       if (ipResponse.ok) {
         const ipData = await ipResponse.json()
-        setIsOnline(true)
+        setIsOnline(ipData.status === "online")
         setCurrentIP(ipData.ip)
-        logConnection(ipData.ip, "online")
-        typeText("CONNECTED")
+        logConnection(ipData.ip, ipData.status === "online" ? "online" : "offline")
+        typeText(ipData.status === "online" ? "CONNECTED" : "OFFLINE MODE")
       } else {
         throw new Error("Connection failed")
       }
     } catch (error) {
+      console.log("Connection check failed, checking if we're in offline mode")
       setIsOnline(false)
       setCurrentIP("Unable to retrieve")
       logConnection("Unable to retrieve", "offline")
-      typeText("DISCONNECTED")
+      typeText("OFFLINE MODE")
     }
 
     // Ensure minimum 3-second animation
@@ -104,26 +105,21 @@ export default function InternetChecker() {
     }
 
     try {
-      const startTime = performance.now()
-      const endpoint = "https://speed.cloudflare.com/__down?bytes=1"
-
-      const response = await fetch(endpoint, {
-        method: "GET",
+      const response = await fetch("/api/ping-cloudflare", {
         cache: "no-cache",
-        mode: "cors",
       })
 
-      const endTime = performance.now()
-      const pingTime = Math.round(endTime - startTime)
+      const data = await response.json()
 
-      if (response.ok) {
-        setPingTime(pingTime)
-        logConnection(currentIP, "ping", pingTime)
-        typeText(`${pingTime}ms`)
+      if (response.ok && data.success) {
+        setPingTime(data.ping)
+        logConnection(currentIP, "ping", data.ping)
+        typeText(`${data.ping}ms`)
       } else {
         throw new Error("Ping failed")
       }
     } catch (error) {
+      console.log("Ping failed, might be offline")
       logConnection(currentIP, "ping", null)
       typeText("PING FAILED")
     }
@@ -754,7 +750,7 @@ export default function InternetChecker() {
                     </div>
                   )}
                   <div className="text-sm opacity-70">
-                    {isOnline ? "Network connection active" : "Viewing from offline cache"}
+                    {isOnline ? "Network connection active" : "Offline mode - cached data available"}
                   </div>
                 </div>
               )}

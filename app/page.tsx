@@ -71,7 +71,7 @@ export default function InternetChecker() {
         setIsOnline(true)
         setCurrentIP(ipData.ip)
         logConnection(ipData.ip, "online")
-        typeText("CONNECTED")
+        typeText("ONLINE")
       } else {
         throw new Error("Connection failed")
       }
@@ -79,8 +79,8 @@ export default function InternetChecker() {
       console.log("IP fetch failed - likely offline or network issue:", error)
       setIsOnline(false)
       setCurrentIP("")
-      logConnection("Offline", "offline")
-      typeText("OFFLINE MODE")
+      logConnection("Offline", "n/a")
+      typeText("OFFLINE")
     }
 
     // Ensure minimum 3-second animation

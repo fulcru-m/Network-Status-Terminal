@@ -106,21 +106,58 @@ export default function InternetChecker() {
     }
 
     try {
-      const startTime = performance.now()
-      const response = await fetch("https://speed.cloudflare.com/__down?bytes=1", {
-        method: "GET",
-        cache: "no-cache",
-        mode: "cors",
-      })
-      const endTime = performance.now()
-      const pingTime = Math.round(endTime - startTime)
-
-      if (response.ok) {
-        setPingTime(pingTime)
-        logConnection(currentIP, "ping", pingTime)
-        typeText(`${pingTime}ms`)
+      const pingResults: number[] = []
+      const totalPings = 5
+      
+      // Update status to show progress
+      typeText("PINGING...")
+      
+      // Perform 5 ping tests
+      for (let i = 0; i < totalPings; i++) {
+        try {
+          const startTime = performance.now()
+          const response = await fetch(`https://speed.cloudflare.com/__down?bytes=1&_ping=${i}&_t=${Date.now()}`, {
+            method: "GET",
+            cache: "no-cache",
+            mode: "cors",
+          })
+          const endTime = performance.now()
+          const pingTime = Math.round(endTime - startTime)
+          
+          if (response.ok) {
+            pingResults.push(pingTime)
+            // Update status to show progress
+            typeText(`PING ${i + 1}/5: ${pingTime}ms`)
+            
+            // Small delay between pings to avoid overwhelming the server
+            if (i < totalPings - 1) {
+              await new Promise(resolve => setTimeout(resolve, 200))
+            }
+          } else {
+            console.warn(`Ping ${i + 1} failed with status:`, response.status)
+          }
+        } catch (error) {
+          console.warn(`Ping ${i + 1} failed:`, error)
+        }
+      }
+      
+      if (pingResults.length > 0) {
+        // Calculate average ping time
+        const averagePing = Math.round(pingResults.reduce((sum, ping) => sum + ping, 0) / pingResults.length)
+        const minPing = Math.min(...pingResults)
+        const maxPing = Math.max(...pingResults)
+        
+        setPingTime(averagePing)
+        logConnection(currentIP, "ping", averagePing)
+        
+        // Show detailed results
+        if (pingResults.length === totalPings) {
+          typeText(`AVG: ${averagePing}ms (${minPing}-${maxPing}ms)`)
+        } else {
+          typeText(`AVG: ${averagePing}ms (${pingResults.length}/${totalPings} OK)`)
+        }
       } else {
-        throw new Error("Ping failed")
+        throw new Error("All pings failed")
       }
     } catch (error) {
       console.log("Ping failed, might be offline")

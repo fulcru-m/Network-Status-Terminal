@@ -79,7 +79,7 @@ export default function InternetChecker() {
       console.log("IP fetch failed - likely offline or network issue:", error)
       setIsOnline(false)
       setCurrentIP("")
-      logConnection("Offline", "n/a")
+      logConnection("Offline", "Offline")
       typeText("OFFLINE")
     }
 
@@ -641,7 +641,7 @@ export default function InternetChecker() {
     const handleOffline = () => {
       setIsOnline(false)
       setCurrentIP("")
-      logConnection("Offline", "n/a")
+      logConnection("Offline", "Offline")
       setLastChecked(new Date().toLocaleString())
       typeText("OFFLINE")
     }

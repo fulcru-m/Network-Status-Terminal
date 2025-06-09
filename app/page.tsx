@@ -105,16 +105,19 @@ export default function InternetChecker() {
     }
 
     try {
-      const response = await fetch("/api/ping-cloudflare", {
+      const startTime = performance.now()
+      const response = await fetch("https://speed.cloudflare.com/__down?bytes=1", {
+        method: "GET",
         cache: "no-cache",
+        mode: "cors",
       })
+      const endTime = performance.now()
+      const pingTime = Math.round(endTime - startTime)
 
-      const data = await response.json()
-
-      if (response.ok && data.success) {
-        setPingTime(data.ping)
-        logConnection(currentIP, "ping", data.ping)
-        typeText(`${data.ping}ms`)
+      if (response.ok) {
+        setPingTime(pingTime)
+        logConnection(currentIP, "ping", pingTime)
+        typeText(`${pingTime}ms`)
       } else {
         throw new Error("Ping failed")
       }
@@ -637,9 +640,9 @@ export default function InternetChecker() {
     const handleOffline = () => {
       setIsOnline(false)
       setCurrentIP("")
-      logConnection("Unknown", "offline")
+      logConnection("Offline", "offline")
       setLastChecked(new Date().toLocaleString())
-      typeText("DISCONNECTED")
+      typeText("OFFLINE MODE")
     }
 
     window.addEventListener("online", handleOnline)

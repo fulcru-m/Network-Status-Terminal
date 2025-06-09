@@ -80,6 +80,13 @@ self.addEventListener('fetch', (event) => {
     return
   }
   
+  // NEVER cache requests to ipify.org - always fetch fresh IP
+  if (url.hostname === 'api.ipify.org') {
+    console.log('Bypassing cache for IP service:', request.url)
+    event.respondWith(fetch(request))
+    return
+  }
+  
   // Handle API requests with network-first strategy (for real-time data)
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(handleApiRequest(request))

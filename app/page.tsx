@@ -309,6 +309,7 @@ export default function InternetChecker() {
 
   // Get speed color for graph line based on average speed
   const getSpeedLineColor = (avgSpeed: number) => {
+    if (avgSpeed >= 900) return "#0080ff"  // Blue for 900+ Mbps
     if (avgSpeed >= 50) return "#00ff41"  // Green
     if (avgSpeed >= 25) return "#ffff00"  // Yellow
     if (avgSpeed >= 10) return "#ffff00"  // Yellow
@@ -683,6 +684,7 @@ export default function InternetChecker() {
       return "text-red-500"
     }
     if (currentStatusType === "speed" && downloadSpeed !== null) {
+      if (downloadSpeed >= 900) return "text-blue-400"  // 900+ Mbps - Blue
       if (downloadSpeed >= 50) return "text-[#00ff41]"  // 50+ Mbps - Green
       if (downloadSpeed >= 25) return "text-yellow-400" // 25-50 Mbps - Yellow
       if (downloadSpeed >= 10) return "text-yellow-400" // 10-25 Mbps - Yellow
@@ -714,6 +716,7 @@ export default function InternetChecker() {
     }
     if (log.status === "speed") {
       if (!log.downloadSpeed) return "text-red-500"
+      if (log.downloadSpeed >= 900) return "text-blue-400"  // 900+ Mbps - Blue
       if (log.downloadSpeed >= 50) return "text-[#00ff41]"  // 50+ Mbps - Green
       if (log.downloadSpeed >= 25) return "text-yellow-400" // 25-50 Mbps - Yellow
       if (log.downloadSpeed >= 10) return "text-yellow-400" // 10-25 Mbps - Yellow
